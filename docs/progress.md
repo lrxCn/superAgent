@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 9 |
+| Completed | 10 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 10 - Plan-and-Execute path.
+**Recommended next task**: 11 - Parallel multi-agent orchestrator.
 
 ## Task List
 
@@ -28,7 +28,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ✅ 完成 | 2026-06-03 | Added structured route decisions and graph placeholder paths |
 | 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ✅ 完成 | 2026-06-03 | Added LLM-backed direct answer node with fake-client tests and graph integration |
 | 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ✅ 完成 | 2026-06-03 | Added MCP adapter, bounded ReAct loop, tool observation sanitization, and mock coverage |
-| 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ⬜ 待开始 | - | Depends on 03, 07, 09 |
+| 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ✅ 完成 | 2026-06-03 | Added plan schema/validation, deterministic planner, step execution loop with LLM/tool support, graph integration, and tests |
 | 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ⬜ 待开始 | - | Depends on 03, 07, 10 |
 | 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ⬜ 待开始 | - | Depends on 08, 09, 10, 11 |
 | 13 | [Memory write policies](./prompts/13-memory-write-policies.md) | ⬜ 待开始 | - | Depends on 04, 05, 12 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 10 Plan-and-Execute path: plan schema and validation, deterministic planner, execute/observe loop with LLM and MCP tool steps, graph wiring, and unit/integration tests. |
 | 2026-06-03 | Completed task 09 MCP tools and ReAct loop: MCP client adapter with stdio/URL config, tool discovery/call protocol, observation sanitization, bounded ReAct node, graph integration, and mock tests. |
 | 2026-06-03 | Completed task 08 direct answer path: added direct-answer prompt construction, LLM adapter usage with fake-client injection, fallback handling for LLM errors, and unit/integration coverage. |
 | 2026-06-03 | Completed task 07 intent and complexity router: deterministic direct/tool/plan/multi-agent/fallback routing, observable signals/confidence/reasons, reflection flag, graph conditional paths, and tests. |

@@ -12,6 +12,14 @@ from agent.context_budget import check_context_budget, compress_state_context
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.nodes.direct import create_direct_answer_node
+from agent.nodes.planner import (
+    choose_plan_execution_path,
+    choose_plan_validate_path,
+    create_execute_plan_node,
+    create_plan_generate_node,
+    create_plan_validate_node,
+    create_step_observe_node,
+)
 from agent.nodes.react import create_react_node
 from agent.router import route_intent
 from agent.state import (
@@ -19,7 +27,6 @@ from agent.state import (
     AgentState,
     MemoryContext,
     MemoryWriteResult,
-    Plan,
     RuntimeConfig,
 )
 from agent.tools.mcp import MCPClient
@@ -93,16 +100,6 @@ def choose_execution_path(state: AgentState) -> Literal[
     return decision["path"]
 
 
-async def planner(state: AgentState) -> AgentState:
-    """Planner path placeholder until plan-and-execute is implemented."""
-    plan: Plan = {"steps": [], "status": "pending"}
-    return {
-        "plan": state.get("plan") or plan,
-        "final_answer": state.get("final_answer")
-        or "Planner path selected; plan execution is not implemented yet.",
-    }
-
-
 async def multi_agent_orchestrator(state: AgentState) -> AgentState:
     """Multi-agent path placeholder until worker orchestration is implemented."""
     result: AgentResult = {
@@ -165,7 +162,13 @@ def create_graph_builder(
         "react_agent",
         create_react_node(llm_client=llm_client, mcp_client=mcp_client),
     )
-    graph_builder.add_node("planner", planner)
+    graph_builder.add_node("plan_generate", create_plan_generate_node())
+    graph_builder.add_node("plan_validate", create_plan_validate_node())
+    graph_builder.add_node(
+        "execute_plan",
+        create_execute_plan_node(llm_client=llm_client, mcp_client=mcp_client),
+    )
+    graph_builder.add_node("step_observe", create_step_observe_node())
     graph_builder.add_node("multi_agent_orchestrator", multi_agent_orchestrator)
     graph_builder.add_node("fallback", fallback)
     graph_builder.add_node("memory_write", memory_write)
@@ -186,14 +189,25 @@ def create_graph_builder(
         {
             "direct_answer": "direct_answer",
             "react_agent": "react_agent",
-            "planner": "planner",
+            "planner": "plan_generate",
             "multi_agent_orchestrator": "multi_agent_orchestrator",
             "fallback": "fallback",
         },
     )
+    graph_builder.add_conditional_edges(
+        "plan_validate",
+        choose_plan_validate_path,
+        {"execute_plan": "execute_plan", "fallback": "fallback"},
+    )
+    graph_builder.add_edge("plan_generate", "plan_validate")
+    graph_builder.add_edge("execute_plan", "step_observe")
+    graph_builder.add_conditional_edges(
+        "step_observe",
+        choose_plan_execution_path,
+        {"execute_plan": "execute_plan", "memory_write": "memory_write"},
+    )
     graph_builder.add_edge("direct_answer", "memory_write")
     graph_builder.add_edge("react_agent", "memory_write")
-    graph_builder.add_edge("planner", "memory_write")
     graph_builder.add_edge("multi_agent_orchestrator", "memory_write")
     graph_builder.add_edge("fallback", "memory_write")
     graph_builder.add_edge("memory_write", "final_answer")

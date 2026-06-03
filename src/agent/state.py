@@ -68,21 +68,32 @@ class IntentDecision(TypedDict):
     requires_reflection: bool
 
 
+PlanStepType = Literal["llm", "tool", "agent"]
+PlanStepStatus = Literal["pending", "running", "completed", "failed", "skipped"]
+PlanStatus = Literal["not_started", "pending", "running", "completed", "failed"]
+
+
 class PlanStep(TypedDict):
-    """Planned work unit for later plan-and-execute tasks."""
+    """Planned work unit for plan-and-execute."""
 
     id: str
-    description: str
+    title: str
+    type: PlanStepType
     dependencies: list[str]
     acceptance_criteria: list[str]
-    status: Literal["pending", "running", "completed", "failed", "skipped"]
+    status: PlanStepStatus
+    result: NotRequired[str | None]
+    tool_name: NotRequired[str]
+    tool_arguments: NotRequired[dict[str, object]]
 
 
 class Plan(TypedDict):
-    """Plan-and-execute state placeholder."""
+    """Structured multi-step plan with validation and execution status."""
 
     steps: list[PlanStep]
-    status: Literal["not_started", "pending", "running", "completed", "failed"]
+    status: PlanStatus
+    title: NotRequired[str]
+    validation_errors: NotRequired[list[str]]
 
 
 class MCPSession(TypedDict):
@@ -158,6 +169,9 @@ class AgentState(TypedDict, total=False):
     fallback_reason: str | None
     memory_write_result: MemoryWriteResult
     final_answer: str
+    step_observation_pending: NotRequired[Observation | None]
+    step_result_pending: NotRequired[str | None]
+    step_status_pending: NotRequired[PlanStepStatus | None]
     run_id: NotRequired[str]
     thread_id: NotRequired[str]
 

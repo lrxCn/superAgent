@@ -39,6 +39,16 @@ def _react_graph():
 
 direct_graph = build_graph(llm_client=FakeLLMClient(responses=["direct fake answer"]))
 
+plan_graph = build_graph(
+    llm_client=FakeLLMClient(
+        responses=[
+            "analysis output",
+            "execution output",
+            "summary output",
+        ]
+    )
+)
+
 
 async def test_agent_simple_passthrough() -> None:
     inputs = {"messages": [{"role": "user", "content": "some request"}]}
@@ -55,7 +65,7 @@ async def test_agent_simple_passthrough() -> None:
         (
             "Design and implement a migration plan, then validate each step.",
             "planner",
-            "Planner path selected; plan execution is not implemented yet.",
+            "Plan execution summary",
         ),
         (
             "Use researcher, coder, and reviewer agents in parallel.",
@@ -74,14 +84,19 @@ async def test_agent_routes_to_placeholder_paths(
     expected_path: str,
     expected_answer: str,
 ) -> None:
-    res = await direct_graph.ainvoke({"messages": [{"role": "user", "content": message}]})
+    graph = plan_graph if expected_path == "planner" else direct_graph
+    res = await graph.ainvoke({"messages": [{"role": "user", "content": message}]})
 
     assert res["intent_decision"]["path"] == expected_path
     assert res["intent_decision"]["reason"]
     assert res["intent_decision"]["confidence"] >= 0.72
     assert res["intent_decision"]["signals"]
     assert res["intent_decision"]["requires_reflection"] is True
-    assert res["final_answer"] == expected_answer
+    if expected_path == "planner":
+        assert res["plan"]["status"] == "completed"
+        assert expected_answer in res["final_answer"]
+    else:
+        assert res["final_answer"] == expected_answer
 
 
 async def test_agent_routes_tool_request_through_react_loop() -> None:

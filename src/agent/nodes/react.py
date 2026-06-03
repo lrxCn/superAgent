@@ -296,9 +296,17 @@ def create_react_node(
     """Create a ReAct node with optional test doubles."""
     if llm_client is None:
         llm_factory: Callable[[], LLMClient] = create_siliconflow_llm
+        mcp_factory = None
     else:
-        llm_factory = lambda: llm_client
-    mcp_factory = None if mcp_client is None else lambda: mcp_client
+        def llm_factory() -> LLMClient:
+            return llm_client
+
+        mcp_factory = None
+
+    if mcp_client is not None:
+        def mcp_factory() -> MCPClient:
+            return mcp_client
+
     return ReActNode(llm_factory=llm_factory, mcp_factory=mcp_factory)
 
 
