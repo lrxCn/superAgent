@@ -19,7 +19,7 @@ def test_create_initial_state_uses_messages_contract() -> None:
 def test_load_config_uses_safe_defaults_and_redacts_secret_presence() -> None:
     config = load_config(
         {
-            "OPENAI_API_KEY": "test-key",
+            "OPENAI_API_KEY": "placeholder",
             "LANGSMITH_API_KEY": "",
             "REACT_MAX_STEPS": "5",
             "LLM_MAX_TOKENS": "2048",
@@ -27,6 +27,7 @@ def test_load_config_uses_safe_defaults_and_redacts_secret_presence() -> None:
     )
 
     assert config.openai_api_key_present is True
+    assert "placeholder" not in repr(config)
     assert config.langsmith_api_key_present is False
     assert config.openai_model_name == DEFAULT_OPENAI_MODEL_NAME
     assert config.react_max_steps == 5

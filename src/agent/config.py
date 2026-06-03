@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping
 
 from agent.state import RuntimeConfig
@@ -58,6 +58,7 @@ class AppConfig:
     graphiti_backend: str
     graphiti_mcp_url: str
     falkordb_url: str
+    openai_api_key: str | None = field(default=None, repr=False)
 
     def to_runtime_config(self) -> RuntimeConfig:
         """Return per-run controls stored in graph state."""
@@ -81,6 +82,7 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         langchain_project=env.get("LANGCHAIN_PROJECT", DEFAULT_LANGCHAIN_PROJECT),
         langchain_endpoint=env.get("LANGCHAIN_ENDPOINT", DEFAULT_LANGCHAIN_ENDPOINT),
         langsmith_api_key_present=bool(env.get("LANGSMITH_API_KEY")),
+        openai_api_key=env.get("OPENAI_API_KEY") or None,
         openai_api_key_present=bool(env.get("OPENAI_API_KEY")),
         openai_base_url=env.get("OPENAI_BASE_URL", DEFAULT_OPENAI_BASE_URL),
         openai_model_name=env.get("OPENAI_MODEL_NAME", DEFAULT_OPENAI_MODEL_NAME),
