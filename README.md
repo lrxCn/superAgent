@@ -1,14 +1,14 @@
 # SuperAgent
 
-SuperAgent is a planned LangGraph-based agent runtime for local `langgraph dev`. The repository currently contains the upstream LangGraph Python template: `src/agent/graph.py` is still a single-node example graph. The target architecture is documented in [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) and will be implemented through the task cards in [docs/prompts/](docs/prompts/).
+SuperAgent is a LangGraph-based agent runtime for local `langgraph dev`. The repository currently contains a runnable state/config graph skeleton; the target architecture is documented in [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) and will be implemented through the task cards in [docs/prompts/](docs/prompts/).
 
 ## Current Status
 
 | Item | Status |
 |------|--------|
-| Runtime code | LangGraph template only |
+| Runtime code | Runnable state/config graph skeleton |
 | Target runtime | Planned multi-path agent runtime |
-| Core tasks | 01-15 planned |
+| Core tasks | 02/15 completed |
 | Progress | [docs/progress.md](docs/progress.md) |
 | Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) |
 
