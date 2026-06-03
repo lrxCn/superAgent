@@ -1,98 +1,151 @@
 # SuperAgent
 
-SuperAgent is a LangGraph-based agent runtime for local `langgraph dev`. The repository currently contains a runnable state/config graph skeleton; the target architecture is documented in [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) and will be implemented through the task cards in [docs/prompts/](docs/prompts/).
+SuperAgent is a LangGraph-based multi-path agent runtime for local `langgraph dev`. Tasks 01–14 are implemented: routing, direct answer, MCP ReAct, plan-and-execute, parallel multi-agent, reflection, memory write policies, and runtime observability.
+
+Design history and decisions live in [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md). Architecture maps for the **current code** are in [docs/maps/](docs/maps/).
 
 ## Current Status
 
 | Item | Status |
 |------|--------|
-| Runtime code | Runnable state/config graph skeleton with SiliconFlow LLM adapter, optional PostgreSQL checkpointing, and Graphiti memory client |
-| Target runtime | Planned multi-path agent runtime |
-| Core tasks | 06/15 completed |
-| Progress | [docs/progress.md](docs/progress.md) |
-| Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) |
+| Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
+| Implementation queue | 15/15 tasks complete — see [docs/progress.md](docs/progress.md) |
+| Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
+| Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) (with implementation status) |
+
+### Implemented vs planned
+
+| Capability | Status |
+|------------|--------|
+| State schema, graph wiring, SiliconFlow LLM | Implemented |
+| Intent router (direct / ReAct / plan / multi-agent / fallback) | Implemented |
+| Context budget + deterministic compression | Implemented |
+| MCP ReAct loop + observation sanitization | Implemented (example filesystem MCP) |
+| Plan-and-execute (generate, validate, execute, observe) | Implemented |
+| Parallel multi-agent orchestrator | Implemented (mock workers) |
+| Reflection gate, evaluator, revise, max rounds | Implemented |
+| Memory write policies + Graphiti client | Implemented (write path; read stub) |
+| PostgreSQL checkpointer factory | Implemented (optional; memory fallback) |
+| Runtime events + path metrics | Implemented |
+| LangGraph Platform deployment | Planned (out of phase 1 scope) |
+| Production MCP servers | Planned (backend-provided; example server only) |
+| Long-term memory read on `load_memory` | Planned (node returns empty context today) |
+| Production worker backends | Planned (mock registry today) |
 
 ## Documentation Order
 
-1. `AGENTS.md`: local agent working rules.
-2. `README.md`: current architecture and runtime contract.
-3. `docs/progress.md`: task queue, status, dependencies, and changelog.
-4. `docs/prompts/`: one executable implementation task per file.
-5. `docs/prd/`: design intent, decisions, and historical rationale.
-6. `docs/maps/`: architecture/code maps generated after implementation lands.
+1. `AGENTS.md` — agent working rules.
+2. `README.md` — runtime contract (this file).
+3. `docs/progress.md` — task queue and changelog.
+4. `docs/maps/` — graph, module, and state maps.
+5. `docs/prompts/` — historical implementation task cards.
+6. `docs/prd/` — design intent and rationale.
 
-## Architecture
+## Graph Topology
 
-The target runtime starts with user input, loads memory, checks context budget, routes by task type and complexity, then chooses one of the execution paths below:
+Entry: `langgraph.json` exposes `agent` from `./src/agent/graph.py:graph`.
+
+```mermaid
+flowchart TD
+  start_node([START]) --> intake
+  intake --> load_memory
+  load_memory --> context_budget
+  context_budget -->|over budget| compress_memory
+  context_budget -->|ok| intent_router
+  compress_memory --> intent_router
+  intent_router -->|direct_answer| direct_answer
+  intent_router -->|react_agent| react_agent
+  intent_router -->|planner| plan_generate
+  intent_router -->|multi_agent| multi_agent_orchestrator
+  intent_router -->|fallback| fallback
+  plan_generate --> plan_validate
+  plan_validate --> execute_plan
+  plan_validate --> fallback
+  execute_plan --> step_observe
+  step_observe --> execute_plan
+  step_observe --> reflection_gate
+  direct_answer --> reflection_gate
+  react_agent --> reflection_gate
+  multi_agent_orchestrator --> reflection_gate
+  fallback --> reflection_gate
+  reflection_gate --> evaluator
+  reflection_gate --> memory_write
+  evaluator --> memory_write
+  evaluator --> revise
+  evaluator --> fallback
+  revise --> reflection_gate
+  memory_write --> final_answer
+  final_answer --> end_node([END])
+```
+
+Full edge labels and path notes: [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md).
+
+## Execution Paths
 
 | Path | Purpose |
 |------|---------|
-| Direct answer | Low-risk requests that do not need tools or planning |
-| ReAct tools | External or tool-backed work through MCP |
-| Plan-and-Execute | Multi-step goals with explicit plan validation and step observations |
-| Multi-Agent | Parallel worker execution for researcher/coder/reviewer/memory-manager roles |
-| Reflection | Partially enabled quality gate for complex, tool, plan, multi-agent, high-risk, low-confidence, or user-requested review paths |
-| Fallback | Clarification, partial result, safe refusal, or downgraded answer when execution cannot continue |
+| Direct answer | Low-risk requests without tools or planning |
+| ReAct tools | MCP-backed tool loop with bounded steps |
+| Plan-and-Execute | Structured plan, validation, step execution and observation |
+| Multi-Agent | Parallel workers (researcher, coder, reviewer, memory manager) |
+| Reflection | Quality gate for complex, tool, plan, multi-agent, high-risk, or low-confidence routes |
+| Fallback | Clarification, partial result, or safe downgrade when execution cannot continue |
 
-The implementation should keep LangGraph as the orchestration boundary. Nodes should exchange explicit state fields rather than ad hoc dictionaries that drift across tasks.
+Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](docs/maps/state-contract.md).
 
 ## Contracts
 
 ### Runtime
 
-- First phase only targets local `langgraph dev`.
-- Do not plan for LangGraph Platform deployment in the first phase.
-- `langgraph.json` exposes the `agent` graph from `src/agent/graph.py`.
+- Phase 1 target: local `langgraph dev` only (no LangGraph Platform).
+- `langgraph.json` → `src/agent/graph.py:graph`.
+- Optional PostgreSQL checkpointer: `create_graph_with_checkpointer()` in `graph.py`.
+- Inject test doubles: `build_graph(llm_client=..., mcp_client=..., worker_registry=..., memory_client=...)`.
 
 ### LLM
 
-- First real provider: SiliconFlow only.
-- Use the OpenAI-compatible variable names retained from commonAgent:
-  - `OPENAI_API_KEY`
-  - `OPENAI_BASE_URL`
-  - `OPENAI_MODEL_NAME`
+- Provider: SiliconFlow (OpenAI-compatible).
+- Variables: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL_NAME`.
 - Default model: `Pro/moonshotai/Kimi-K2.6`.
 - Do not commit real API keys.
 
 ### Memory
 
-- Short-term memory: LangGraph checkpoint + PostgreSQL.
-- Checkpointer package: `langgraph-checkpoint-postgres`.
-- First implementation should use `AsyncPostgresSaver.from_conn_string(DATABASE_URL)` and `setup()` for table initialization.
-- Long-term memory: local Graphiti deployment, defaulting to the Graphiti MCP Server Docker Compose FalkorDB backend on OrbStack/Docker. See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
+- Short-term: LangGraph checkpoint + PostgreSQL (`langgraph-checkpoint-postgres`, `DATABASE_URL`, `CHECKPOINT_SETUP`).
+- Long-term write: Graphiti client (`memory/graphiti.py`, policies in `memory/policy.py`). See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
+- `load_memory` currently supplies an empty `memory_context` unless the caller pre-populates it.
 
 ### Tools
 
-- External tools are reached through MCP.
-- Backend engineering will provide the real MCP server later.
-- Until then, use the official filesystem MCP server only as a connectivity example:
+- External tools via MCP (`tools/mcp.py`).
+- Example connectivity server (phase 1):
 
 ```bash
 npx -y @modelcontextprotocol/server-filesystem ./docs
 ```
 
+Configure with `MCP_EXAMPLE_SERVER_COMMAND` and `MCP_EXAMPLE_SERVER_ARGS`.
+
 ### Multi-Agent
 
-- First phase supports parallel worker orchestration.
-- Defaults:
-  - `WORKER_MAX_CONCURRENCY=4`
-  - `WORKER_TIMEOUT_SECONDS=120`
-- Worker timeout or exception is recorded as `failed`; aggregation returns `partial` without waiting past timeout.
+- Parallel orchestration with timeout and concurrency limits.
+- Defaults: `WORKER_MAX_CONCURRENCY=4`, `WORKER_TIMEOUT_SECONDS=120`.
+- Worker timeout → `failed`; aggregation may be `partial`.
 
 ### Reflection
 
-- Reflection is partially enabled.
-- Enable when:
-  - route path is tool, plan, or multi-agent,
-  - route confidence is below `0.72`,
-  - fallback is about to run,
-  - user explicitly asks for review/checking,
-  - high-risk keyword/category rules match.
+- Enabled for tool/plan/multi-agent paths, `confidence < 0.72`, high-risk keywords, explicit review requests, and related triggers.
 - Default `REFLECTION_MAX_ROUNDS=1`.
+
+### Observability
+
+- Structured `runtime_events` and `path_metrics` on state (`observability.py`).
+- Tool summaries redact secrets and omit full payloads.
+- LangSmith when `LANGCHAIN_TRACING_V2=true` and `LANGSMITH_API_KEY` is set locally.
 
 ### Configuration
 
-Non-secret defaults are tracked in both `.env_example` and `.env.example` for compatibility with different tooling conventions. Keep the two files identical; real keys belong only in local `.env`.
+Non-secret defaults: `.env_example` and `.env.example` (keep identical). Real keys only in local `.env` (gitignored).
 
 ```dotenv
 LANGCHAIN_TRACING_V2=true
@@ -123,9 +176,11 @@ GRAPHITI_MCP_URL=http://localhost:8000
 FALKORDB_URL=redis://localhost:6379
 ```
 
+Place `OPENAI_API_KEY` and `LANGSMITH_API_KEY` only in `.env`, not in committed files.
+
 ## Development Workflow
 
-Use `uv` for Python environment and dependency management.
+Use `uv` for Python and dependencies.
 
 ```bash
 uv sync --dev
@@ -135,4 +190,8 @@ uv run mypy src
 uv run langgraph dev
 ```
 
-To execute implementation work, open one task card from `docs/prompts/` in a fresh agent window and follow its model/reasoning gate, dependency check, validation plan, progress update, and git commit rule.
+Optional smoke (real services): PostgreSQL checkpoint, Graphiti, MCP filesystem server — see integration tests marked optional/skipped in CI.
+
+## Maintenance
+
+The 15-task implementation queue is complete. For follow-on work, extend the runtime in focused PRs and update `docs/maps/` plus this README when graph topology or state contracts change.

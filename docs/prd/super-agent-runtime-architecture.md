@@ -1,7 +1,35 @@
 # SuperAgent Runtime Architecture PRD
 
 > 来源材料：[docs/总体架构.md](../总体架构.md) 与 [docs/agent-runtime-architecture-visual.html](../agent-runtime-architecture-visual.html)。
-> 本文是后续 `$requirement-planner` 拆分任务卡的需求输入，不代表当前代码已经实现。
+> 本文保留设计历史与决策记录。**当前运行时代码契约以 [README.md](../../README.md) 与 [docs/maps/](../maps/) 为准。**
+
+## Implementation Status (2026-06-03)
+
+Tasks 01–15 from `docs/prompts/` are complete. Summary:
+
+| PRD area | Status | Code / notes |
+|----------|--------|----------------|
+| State schema + graph skeleton | **Implemented** | `state.py`, `graph.py` |
+| SiliconFlow LLM adapter | **Implemented** | `llm.py` |
+| Checkpoint + PostgreSQL | **Implemented** | `memory/checkpoint.py`; optional at compile |
+| Graphiti long-term memory | **Implemented (write)** | `memory/graphiti.py`, `memory/policy.py`; `load_memory` read still stub |
+| Context budget + compression | **Implemented** | `context_budget.py` |
+| Intent / complexity router | **Implemented** | `router.py` |
+| Direct answer path | **Implemented** | `nodes/direct.py` |
+| MCP + ReAct loop | **Implemented** | `tools/mcp.py`, `nodes/react.py`; example filesystem MCP only |
+| Plan-and-Execute | **Implemented** | `planning.py`, `nodes/planner.py` |
+| Parallel multi-agent | **Implemented (mock workers)** | `workers/*`, `nodes/orchestrator.py` |
+| Reflection / evaluator / revise | **Implemented** | `reflection.py` |
+| Memory write policies | **Implemented** | `memory/policy.py`, `nodes/memory_write.py` |
+| Observability / path metrics | **Implemented** | `observability.py` |
+| LangGraph Platform deploy | **Not planned (phase 1)** | Local `langgraph dev` only |
+| Production MCP servers | **Follow-up** | Backend-provided servers; client adapter ready |
+| Production worker agents | **Follow-up** | Mock registry replaced per role |
+| UI / multi-tenant | **Not planned (phase 1)** | Per PRD non-goals |
+
+Architecture maps: [docs/maps/README.md](../maps/README.md).
+
+---
 
 ## 1. 背景
 
@@ -76,17 +104,19 @@ SuperAgent 要提供一个基于 LangGraph 的通用 Agent Runtime，支持以�
 
 ## 5. 当前事实与目标差距
 
-| Area | 当前事实 | 目标状态 |
+> **Historical.** At PRD authoring time the repo was a LangGraph template. As of task 15 completion, the “目标状态” column below is largely met; remaining gaps are called out in the Implementation Status table and README “Implemented vs planned”.
+
+| Area | 当前事实 (2026-06-03) | 目标状态 |
 |------|----------|----------|
-| Runtime | LangGraph 模板单节点 `call_model` | 多路径 Agent Runtime 状态图 |
-| State | 示例 `changeme` 字段 | 包含输入、上下文、记忆、路由决策、计划、工具结果、评估结果和输出 |
-| Router | 无真实路由 | 基于任务类型、复杂度和约束选择执行路径 |
-| Tools | 无工具执行契约 | 通过 MCP 接入外部工具，并有工具注册、参数校验、执行、观察结果写入和错误处理 |
-| Planning | 无任务拆分 | 支持 plan/validate/execute/observe/done |
-| Multi-Agent | 无 Worker 编排 | 支持 researcher/coder/reviewer/memory_manager 等 Worker 并行编排 |
-| Reflection | 无输出质量检查 | 支持部分开启的 evaluator、revise、max rounds 和 fallback |
-| Memory | 无记忆读写 | 短期记忆使用 checkpoint + PostgreSQL，长期记忆使用本地 Graphiti |
-| Observability | 依赖模板基础能力 | 对关键决策、路径、错误、降级和质量检查可追踪 |
+| Runtime | 多路径 LangGraph 状态图 (`graph.py`) | 多路径 Agent Runtime 状态图 |
+| State | 显式 `AgentState` 字段 + observability | 包含输入、上下文、记忆、路由决策、计划、工具结果、评估结果和输出 |
+| Router | `router.py` 结构化路由 | 基于任务类型、复杂度和约束选择执行路径 |
+| Tools | MCP client + ReAct；示例 filesystem server | 通过 MCP 接入外部工具，并有工具注册、参数校验、执行、观察结果写入和错误处理 |
+| Planning | plan/validate/execute/observe 循环 | 支持 plan/validate/execute/observe/done |
+| Multi-Agent | 并行 mock Worker 编排 | 支持 researcher/coder/reviewer/memory_manager 等 Worker 并行编排 |
+| Reflection | 部分开启的 gate/evaluator/revise | 支持部分开启的 evaluator、revise、max rounds 和 fallback |
+| Memory | checkpoint + Graphiti 写入；`load_memory` 读仍为占位 | 短期记忆使用 checkpoint + PostgreSQL，长期记忆使用本地 Graphiti |
+| Observability | `runtime_events` / `path_metrics` | 对关键决策、路径、错误、降级和质量检查可追踪 |
 
 ## 6. 目标用户与使用场景
 

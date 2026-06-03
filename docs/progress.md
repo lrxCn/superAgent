@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 14 |
+| Completed | 15 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 15 - Final docs and architecture maps.
+**Recommended next step**: Maintenance — extend runtime in focused PRs; keep [README.md](../README.md) and [docs/maps/](./maps/) aligned with code.
 
 ## Task List
 
@@ -33,12 +33,13 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ✅ 完成 | 2026-06-03 | Added reflection gate with explainable skip/enable reasons, rule-based evaluator, revise loop with max rounds, graph wiring, and unit/integration tests |
 | 13 | [Memory write policies](./prompts/13-memory-write-policies.md) | ✅ 完成 | 2026-06-03 | Added memory write policies, sensitive filtering, Graphiti write coordination with failure degradation, graph wiring, and unit/integration tests |
 | 14 | [Observability and path metrics](./prompts/14-observability-path-metrics.md) | ✅ 完成 | 2026-06-03 | Added runtime events/path metrics, safe summaries, node instrumentation, LangSmith gating, and unit/integration smoke tests |
-| 15 | [Final docs and architecture maps](./prompts/15-final-docs-architecture-maps.md) | ⬜ 待开始 | - | Depends on 01-14 |
+| 15 | [Final docs and architecture maps](./prompts/15-final-docs-architecture-maps.md) | ✅ 完成 | 2026-06-03 | Updated README runtime contract, PRD implementation status, docs/maps (graph, module, state), progress finalization |
 
 ## Changelog
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 15 final docs and architecture maps: README aligned to implemented runtime, PRD implementation status, docs/maps topology and contracts, progress queue closed (15/15). |
 | 2026-06-03 | Completed task 14 observability and path metrics: structured runtime events, path metrics, safe tool summaries, node instrumentation across control/execution paths, and characterization smoke tests. |
 | 2026-06-03 | Completed task 13 memory write policies: candidate extraction, sensitive filtering, stability checks, Graphiti write coordination with error degradation, extended MemoryWriteResult schema, graph wiring, and tests. |
 | 2026-06-03 | Completed task 12 reflection evaluator and revise: reflection gate with path/confidence/risk/review triggers, rule-based evaluator, deterministic revise, max rounds fallback, graph integration, and tests. |
