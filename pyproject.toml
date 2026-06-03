@@ -1,14 +1,15 @@
 [project]
-name = "agent"
+name = "superagent"
 version = "0.0.1"
-description = "Starter template for making a new agent LangGraph."
+description = "LangGraph-based SuperAgent runtime for local development."
 authors = [
-    { name = "William Fu-Hinthorn", email = "13333726+hinthornw@users.noreply.github.com" },
+    { name = "SuperAgent Maintainers" },
 ]
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
+    "langchain-openai>=1.0.0",
     "langgraph>=1.0.0",
     "python-dotenv>=1.0.1",
 ]
@@ -22,9 +23,8 @@ requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["langgraph.templates.agent", "agent"]
+packages = ["agent"]
 [tool.setuptools.package-dir]
-"langgraph.templates.agent" = "src/agent"
 "agent" = "src/agent"
 
 

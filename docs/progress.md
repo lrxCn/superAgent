@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 0 |
+| Completed | 1 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 01 - Baseline docs and config hygiene.
+**Recommended next task**: 02 - State schema and graph skeleton.
 
 ## Task List
 
@@ -19,7 +19,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | ID | Task | Status | Completed At | Notes |
 |----|------|--------|--------------|-------|
-| 01 | [Baseline docs and config hygiene](./prompts/01-baseline-docs-config.md) | ⬜ 待开始 | - | No dependencies |
+| 01 | [Baseline docs and config hygiene](./prompts/01-baseline-docs-config.md) | ✅ 完成 | 2026-06-03 | Established SuperAgent docs/config metadata baseline |
 | 02 | [State schema and graph skeleton](./prompts/02-state-schema-graph-skeleton.md) | ⬜ 待开始 | - | Depends on 01 |
 | 03 | [SiliconFlow LLM adapter](./prompts/03-siliconflow-llm-adapter.md) | ⬜ 待开始 | - | Depends on 02 |
 | 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ⬜ 待开始 | - | Depends on 02 |
@@ -39,4 +39,5 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 01 baseline docs/config hygiene: SuperAgent project metadata, environment examples, ignore rules, README config policy, and validation. |
 | 2026-06-03 | Created SuperAgent planning docs and 15-task implementation queue from `docs/prd/super-agent-runtime-architecture.md`. |

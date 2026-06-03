@@ -92,7 +92,7 @@ npx -y @modelcontextprotocol/server-filesystem ./docs
 
 ### Configuration
 
-Non-secret defaults belong in `.env_example`; real keys belong only in local `.env`.
+Non-secret defaults are tracked in both `.env_example` and `.env.example` for compatibility with different tooling conventions. Keep the two files identical; real keys belong only in local `.env`.
 
 ```dotenv
 LANGCHAIN_TRACING_V2=true
@@ -136,4 +136,3 @@ uv run langgraph dev
 ```
 
 To execute implementation work, open one task card from `docs/prompts/` in a fresh agent window and follow its model/reasoning gate, dependency check, validation plan, progress update, and git commit rule.
-
