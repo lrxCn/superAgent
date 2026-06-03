@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 3 |
+| Completed | 4 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 04 - PostgreSQL checkpoint memory.
+**Recommended next task**: 05 - Graphiti long-term memory client.
 
 ## Task List
 
@@ -22,7 +22,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 01 | [Baseline docs and config hygiene](./prompts/01-baseline-docs-config.md) | ✅ 完成 | 2026-06-03 | Established SuperAgent docs/config metadata baseline |
 | 02 | [State schema and graph skeleton](./prompts/02-state-schema-graph-skeleton.md) | ✅ 完成 | 2026-06-03 | Added typed state/config contracts and runnable graph skeleton |
 | 03 | [SiliconFlow LLM adapter](./prompts/03-siliconflow-llm-adapter.md) | ✅ 完成 | 2026-06-03 | Added SiliconFlow/OpenAI-compatible LLM adapter and fake client tests |
-| 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ⬜ 待开始 | - | Depends on 02 |
+| 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ✅ 完成 | 2026-06-03 | Added optional PostgreSQL checkpointer factory with memory fallback |
 | 05 | [Graphiti long-term memory client](./prompts/05-graphiti-long-term-memory.md) | ⬜ 待开始 | - | Depends on 02 |
 | 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ⬜ 待开始 | - | Depends on 02, 04, 05 |
 | 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ⬜ 待开始 | - | Depends on 02, 03, 06 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 04 PostgreSQL checkpoint memory: dependency baseline, async checkpointer factory, graph compile hook, memory fallback, and mock plus optional postgres tests. |
 | 2026-06-03 | Completed task 03 SiliconFlow LLM adapter: centralized OpenAI-compatible client factory, fake LLM client, structured errors, and mock-only tests. |
 | 2026-06-03 | Completed task 02 state schema and graph skeleton: explicit runtime state, safe config loader, multi-node LangGraph skeleton, and contract tests. |
 | 2026-06-03 | Completed task 01 baseline docs/config hygiene: SuperAgent project metadata, environment examples, ignore rules, README config policy, and validation. |

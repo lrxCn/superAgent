@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
 from agent.config import load_config
+from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.state import (
     AgentState,
     ContextBudget,
@@ -132,28 +134,46 @@ async def final_answer(state: AgentState) -> AgentState:
     }
 
 
-graph_builder = StateGraph(AgentState)
-graph_builder.add_node("intake", intake)
-graph_builder.add_node("load_memory", load_memory)
-graph_builder.add_node("context_budget", context_budget)
-graph_builder.add_node("intent_router", intent_router)
-graph_builder.add_node("direct_answer", direct_answer)
-graph_builder.add_node("fallback", fallback)
-graph_builder.add_node("memory_write", memory_write)
-graph_builder.add_node("final_answer", final_answer)
+def create_graph_builder() -> StateGraph[AgentState]:
+    """Create the SuperAgent graph builder without external connections."""
+    graph_builder = StateGraph(AgentState)
+    graph_builder.add_node("intake", intake)
+    graph_builder.add_node("load_memory", load_memory)
+    graph_builder.add_node("context_budget", context_budget)
+    graph_builder.add_node("intent_router", intent_router)
+    graph_builder.add_node("direct_answer", direct_answer)
+    graph_builder.add_node("fallback", fallback)
+    graph_builder.add_node("memory_write", memory_write)
+    graph_builder.add_node("final_answer", final_answer)
 
-graph_builder.add_edge("__start__", "intake")
-graph_builder.add_edge("intake", "load_memory")
-graph_builder.add_edge("load_memory", "context_budget")
-graph_builder.add_edge("context_budget", "intent_router")
-graph_builder.add_conditional_edges(
-    "intent_router",
-    choose_execution_path,
-    {"direct_answer": "direct_answer", "fallback": "fallback"},
-)
-graph_builder.add_edge("direct_answer", "memory_write")
-graph_builder.add_edge("fallback", "memory_write")
-graph_builder.add_edge("memory_write", "final_answer")
-graph_builder.add_edge("final_answer", END)
+    graph_builder.add_edge("__start__", "intake")
+    graph_builder.add_edge("intake", "load_memory")
+    graph_builder.add_edge("load_memory", "context_budget")
+    graph_builder.add_edge("context_budget", "intent_router")
+    graph_builder.add_conditional_edges(
+        "intent_router",
+        choose_execution_path,
+        {"direct_answer": "direct_answer", "fallback": "fallback"},
+    )
+    graph_builder.add_edge("direct_answer", "memory_write")
+    graph_builder.add_edge("fallback", "memory_write")
+    graph_builder.add_edge("memory_write", "final_answer")
+    graph_builder.add_edge("final_answer", END)
+    return graph_builder
 
-graph = graph_builder.compile(name="SuperAgent Runtime Skeleton")
+
+def build_graph(checkpointer: BaseCheckpointSaver | None = None):
+    """Compile the graph, optionally with a checkpointer."""
+    return create_graph_builder().compile(
+        checkpointer=checkpointer,
+        name="SuperAgent Runtime Skeleton",
+    )
+
+
+async def create_graph_with_checkpointer() -> tuple[object, CheckpointerResource]:
+    """Create a compiled graph with PostgreSQL checkpointer fallback."""
+    resource = await create_postgres_checkpointer()
+    return build_graph(checkpointer=resource.checkpointer), resource
+
+
+graph = build_graph()

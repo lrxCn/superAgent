@@ -10,7 +10,9 @@ license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "langchain-openai>=1.0.0",
+    "langgraph-checkpoint-postgres>=3.0.0",
     "langgraph>=1.0.0",
+    "psycopg[binary,pool]>=3.2.0",
     "python-dotenv>=1.0.1",
 ]
 
@@ -54,6 +56,11 @@ lint.ignore = [
 "tests/*" = ["D", "UP"]
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.pytest.ini_options]
+markers = [
+    "postgres: tests that require a reachable PostgreSQL database",
+]
 
 [dependency-groups]
 dev = [

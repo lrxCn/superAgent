@@ -6,9 +6,9 @@ SuperAgent is a LangGraph-based agent runtime for local `langgraph dev`. The rep
 
 | Item | Status |
 |------|--------|
-| Runtime code | Runnable state/config graph skeleton with SiliconFlow LLM adapter |
+| Runtime code | Runnable state/config graph skeleton with SiliconFlow LLM adapter and optional PostgreSQL checkpointing |
 | Target runtime | Planned multi-path agent runtime |
-| Core tasks | 03/15 completed |
+| Core tasks | 04/15 completed |
 | Progress | [docs/progress.md](docs/progress.md) |
 | Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) |
 
