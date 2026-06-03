@@ -16,6 +16,8 @@ def test_agent_state_accepts_minimum_runtime_contract() -> None:
         "path": "direct_answer",
         "reason": "unit test",
         "confidence": 1.0,
+        "signals": ["simple_question"],
+        "requires_reflection": False,
     }
     state: AgentState = {
         "messages": [{"role": "user", "content": "hello"}],

@@ -64,6 +64,8 @@ class IntentDecision(TypedDict):
     path: RoutePath
     reason: str
     confidence: float
+    signals: list[str]
+    requires_reflection: bool
 
 
 class PlanStep(TypedDict):
