@@ -11,7 +11,9 @@ from agent.config import load_config
 from agent.context_budget import check_context_budget, compress_state_context
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
+from agent.memory.graphiti import LongTermMemoryClient
 from agent.nodes.direct import create_direct_answer_node
+from agent.nodes.memory_write import create_memory_write_node
 from agent.nodes.orchestrator import create_multi_agent_orchestrator_node
 from agent.nodes.planner import (
     choose_plan_execution_path,
@@ -30,12 +32,7 @@ from agent.reflection import (
     create_revise_node,
 )
 from agent.router import route_intent
-from agent.state import (
-    AgentState,
-    MemoryContext,
-    MemoryWriteResult,
-    RuntimeConfig,
-)
+from agent.state import AgentState, MemoryContext, RuntimeConfig
 from agent.tools.mcp import MCPClient
 from agent.workers.registry import WorkerRegistry
 
@@ -146,15 +143,6 @@ async def fallback(state: AgentState) -> AgentState:
     return updates
 
 
-async def memory_write(state: AgentState) -> AgentState:
-    """Skip memory writes until memory tasks are implemented."""
-    result: MemoryWriteResult = {
-        "status": "skipped",
-        "reason": "Memory write is not implemented in the skeleton.",
-    }
-    return {"memory_write_result": state.get("memory_write_result") or result}
-
-
 async def final_answer(state: AgentState) -> AgentState:
     """Ensure the graph always returns a final answer field."""
     return {
@@ -169,6 +157,7 @@ def create_graph_builder(
     worker_registry: object | None = None,
     evaluator: object | None = None,
     reviser: object | None = None,
+    memory_client: LongTermMemoryClient | None = None,
 ) -> StateGraph[AgentState]:
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
@@ -203,7 +192,10 @@ def create_graph_builder(
         "revise",
         create_revise_node(reviser if callable(reviser) else None),
     )
-    graph_builder.add_node("memory_write", memory_write)
+    graph_builder.add_node(
+        "memory_write",
+        create_memory_write_node(client=memory_client),
+    )
     graph_builder.add_node("final_answer", final_answer)
 
     graph_builder.add_edge("__start__", "intake")
@@ -265,6 +257,7 @@ def build_graph(
     worker_registry: object | None = None,
     evaluator: object | None = None,
     reviser: object | None = None,
+    memory_client: LongTermMemoryClient | None = None,
 ):
     """Compile the graph, optionally with a checkpointer."""
     return create_graph_builder(
@@ -273,6 +266,7 @@ def build_graph(
         worker_registry,
         evaluator,
         reviser,
+        memory_client,
     ).compile(
         checkpointer=checkpointer,
         name="SuperAgent Runtime Skeleton",

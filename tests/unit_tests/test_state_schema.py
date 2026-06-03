@@ -54,7 +54,9 @@ def test_agent_state_accepts_minimum_runtime_contract() -> None:
         "fallback_reason": None,
         "memory_write_result": {
             "status": "skipped",
+            "target": "none",
             "reason": "unit test",
+            "stored_count": 0,
         },
         "final_answer": "hello",
     }

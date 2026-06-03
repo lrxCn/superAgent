@@ -150,7 +150,10 @@ class MemoryWriteResult(TypedDict):
     """Long-term memory write result."""
 
     status: Literal["not_attempted", "stored", "skipped", "error"]
+    target: Literal["none", "graphiti", "checkpoint"]
     reason: str | None
+    error: NotRequired[str | None]
+    stored_count: NotRequired[int]
 
 
 class AgentState(TypedDict, total=False):
