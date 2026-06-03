@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Runtime Architecture</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --ink: #18212f;
+      --muted: #687386;
+      --line: #c8d2e0;
+      --line-strong: #6f7f95;
+      --blue-bg: #eaf2ff;
+      --blue-line: #4f7df3;
+      --blue-ink: #1e3a8a;
+      --green-bg: #e9f8ef;
+      --green-line: #2ca36b;
+      --green-ink: #14532d;
+      --orange-bg: #fff3df;
+      --orange-line: #e6842a;
+      --orange-ink: #8a3b0a;
+      --purple-bg: #f2ecff;
+      --purple-line: #8263d8;
+      --purple-ink: #4c1d95;
+      --red-bg: #fff0f0;
+      --red-line: #df5b5b;
+      --red-ink: #8b1e1e;
+      --cyan-bg: #e8fbff;
+      --cyan-line: #17a2b8;
+      --cyan-ink: #155e75;
+      --shadow: 0 10px 30px rgba(21, 31, 47, 0.08);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      letter-spacing: 0;
+    }
+
+    .page {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 32px 28px 56px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.18;
+      font-weight: 760;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 8px 14px;
+      padding: 12px 14px;
+      border: 1px solid #e1e6ee;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 2px solid currentColor;
+    }
+
+    .diagram-panel,
+    .text-panel {
+      border: 1px solid #e1e6ee;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .diagram-panel {
+      padding: 18px;
+      margin-bottom: 22px;
+      overflow-x: auto;
+    }
+
+    .panel-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: baseline;
+      margin-bottom: 14px;
+    }
+
+    .panel-title h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+      font-weight: 720;
+    }
+
+    .panel-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      text-align: right;
+    }
+
+    svg {
+      display: block;
+      min-width: 1080px;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+
+    .small-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .small-grid .diagram-panel {
+      margin-bottom: 0;
+    }
+
+    .small-grid svg {
+      min-width: 560px;
+    }
+
+    .text-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .text-panel {
+      padding: 18px;
+    }
+
+    .text-panel h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      line-height: 1.3;
+    }
+
+    .text-panel ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.72;
+    }
+
+    .label {
+      font-size: 13px;
+      font-weight: 680;
+      dominant-baseline: middle;
+      text-anchor: middle;
+      fill: currentColor;
+    }
+
+    .sub {
+      font-size: 11px;
+      font-weight: 520;
+      fill: var(--muted);
+    }
+
+    .lane-label {
+      font-size: 12px;
+      font-weight: 740;
+      fill: #64748b;
+    }
+
+    .node rect,
+    .node path {
+      stroke-width: 1.5;
+      filter: drop-shadow(0 4px 10px rgba(18, 28, 45, 0.08));
+    }
+
+    .neutral {
+      color: #334155;
+    }
+
+    .neutral rect,
+    .neutral path {
+      fill: #f8fafc;
+      stroke: #94a3b8;
+    }
+
+    .guard {
+      color: var(--orange-ink);
+    }
+
+    .guard rect,
+    .guard path {
+      fill: var(--orange-bg);
+      stroke: var(--orange-line);
+    }
+
+    .memory {
+      color: var(--green-ink);
+    }
+
+    .memory rect,
+    .memory path {
+      fill: var(--green-bg);
+      stroke: var(--green-line);
+    }
+
+    .router {
+      color: var(--blue-ink);
+    }
+
+    .router rect,
+    .router path {
+      fill: var(--blue-bg);
+      stroke: var(--blue-line);
+    }
+
+    .mode {
+      color: var(--purple-ink);
+    }
+
+    .mode rect,
+    .mode path {
+      fill: var(--purple-bg);
+      stroke: var(--purple-line);
+    }
+
+    .trace {
+      color: var(--cyan-ink);
+    }
+
+    .trace rect,
+    .trace path {
+      fill: var(--cyan-bg);
+      stroke: var(--cyan-line);
+    }
+
+    .danger {
+      color: var(--red-ink);
+    }
+
+    .danger rect,
+    .danger path {
+      fill: var(--red-bg);
+      stroke: var(--red-line);
+    }
+
+    .edge {
+      fill: none;
+      stroke: var(--line-strong);
+      stroke-width: 1.7;
+      marker-end: url(#arrow);
+    }
+
+    .edge-soft {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.4;
+      marker-end: url(#arrow-soft);
+    }
+
+    .edge-dashed {
+      fill: none;
+      stroke: #9aa7ba;
+      stroke-width: 1.4;
+      stroke-dasharray: 6 5;
+      marker-end: url(#arrow-soft);
+    }
+
+    .bus {
+      fill: none;
+      stroke: #9aa7ba;
+      stroke-width: 1.45;
+      stroke-linecap: round;
+    }
+
+    .edge-label {
+      font-size: 11px;
+      font-weight: 650;
+      fill: #64748b;
+      paint-order: stroke;
+      stroke: #fff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+    }
+
+    .band {
+      fill: #f8fafc;
+      stroke: #e6ebf2;
+      stroke-width: 1;
+    }
+
+    .caption {
+      fill: #64748b;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    @media (max-width: 920px) {
+      .page {
+        padding: 22px 14px 40px;
+      }
+
+      header,
+      .small-grid,
+      .text-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .legend {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        white-space: normal;
+      }
+
+      .panel-title {
+        display: block;
+      }
+
+      .panel-title p {
+        margin-top: 6px;
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Agent Runtime Architecture</h1>
+        <p class="subtitle">这版不用 Mermaid 自动布局，所有节点位置和线条都由 SVG 手工控制。主生命周期只画主干，循环和失败恢复放到子图里，避免主图被回边拉乱。</p>
+      </div>
+      <div class="legend" aria-label="图例">
+        <span style="color: var(--orange-line)"><i class="dot"></i>Guardrails</span>
+        <span style="color: var(--blue-line)"><i class="dot"></i>Router / Decision</span>
+        <span style="color: var(--green-line)"><i class="dot"></i>Memory</span>
+        <span style="color: var(--purple-line)"><i class="dot"></i>Execution</span>
+        <span style="color: var(--cyan-line)"><i class="dot"></i>Trace / Hooks</span>
+        <span style="color: var(--red-line)"><i class="dot"></i>Fallback</span>
+      </div>
+    </header>
+
+    <section class="diagram-panel">
+      <div class="panel-title">
+        <h2>1. 主生命周期</h2>
+        <p>入口、上下文、路由、执行、输出、反思、记忆按阅读顺序排列。</p>
+      </div>
+      <svg viewBox="0 0 1240 1460" role="img" aria-label="Agent 主生命周期图">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+          </marker>
+          <marker id="arrow-soft" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#c8d2e0"></path>
+          </marker>
+        </defs>
+
+        <rect class="band" x="38" y="24" width="1164" height="188" rx="8"></rect>
+        <text class="lane-label" x="58" y="48">入口护栏</text>
+        <rect class="band" x="38" y="236" width="1164" height="206" rx="8"></rect>
+        <text class="lane-label" x="58" y="260">上下文与记忆</text>
+        <rect class="band" x="38" y="466" width="1164" height="226" rx="8"></rect>
+        <text class="lane-label" x="58" y="490">路由与执行模式</text>
+        <rect class="band" x="38" y="716" width="1164" height="728" rx="8"></rect>
+        <text class="lane-label" x="58" y="740">输出、反思与记忆写入</text>
+
+        <g class="node neutral">
+          <rect x="545" y="52" width="150" height="44" rx="8"></rect>
+          <text class="label" x="620" y="74">START</text>
+        </g>
+
+        <g class="node trace">
+          <rect x="500" y="128" width="240" height="54" rx="8"></rect>
+          <text class="label" x="620" y="150">on_agent_start</text>
+          <text class="sub" x="620" y="169" text-anchor="middle">run_id / trace 初始化</text>
+        </g>
+
+        <g class="node guard">
+          <rect x="500" y="252" width="240" height="62" rx="8"></rect>
+          <text class="label" x="620" y="276">input_guard</text>
+          <text class="sub" x="620" y="296" text-anchor="middle">身份 / 权限 / 注入检查</text>
+        </g>
+
+        <g class="node danger">
+          <rect x="164" y="252" width="220" height="62" rx="8"></rect>
+          <text class="label" x="274" y="276">safe_response</text>
+          <text class="sub" x="274" y="296" text-anchor="middle">拒绝 / 澄清 / 降级</text>
+        </g>
+
+        <g class="node trace">
+          <rect x="164" y="348" width="220" height="50" rx="8"></rect>
+          <text class="label" x="274" y="373">early_end</text>
+        </g>
+
+        <g class="node memory">
+          <rect x="500" y="348" width="240" height="56" rx="8"></rect>
+          <text class="label" x="620" y="371">load_memory</text>
+          <text class="sub" x="620" y="391" text-anchor="middle">短期 / 长期 / 实体记忆</text>
+        </g>
+
+        <g class="node guard">
+          <rect x="500" y="466" width="240" height="58" rx="8"></rect>
+          <text class="label" x="620" y="490">context_guard</text>
+          <text class="sub" x="620" y="510" text-anchor="middle">上下文预算检查</text>
+        </g>
+
+        <g class="node memory">
+          <rect x="818" y="466" width="220" height="58" rx="8"></rect>
+          <text class="label" x="928" y="490">compress_memory</text>
+          <text class="sub" x="928" y="510" text-anchor="middle">摘要 / 重要性过滤</text>
+        </g>
+
+        <g class="node guard">
+          <rect x="500" y="574" width="240" height="56" rx="8"></rect>
+          <text class="label" x="620" y="598">route_guard</text>
+          <text class="sub" x="620" y="618" text-anchor="middle">执行模式前策略检查</text>
+        </g>
+
+        <g class="node router">
+          <path d="M620 668 L742 736 L620 804 L498 736 Z"></path>
+          <text class="label" x="620" y="727">intent_router</text>
+          <text class="sub" x="620" y="748" text-anchor="middle">选择执行模式</text>
+        </g>
+
+        <g class="node mode">
+          <rect x="82" y="846" width="190" height="64" rx="8"></rect>
+          <text class="label" x="177" y="872">Direct Answer</text>
+          <text class="sub" x="177" y="893" text-anchor="middle">简单问答</text>
+        </g>
+        <g class="node mode">
+          <rect x="322" y="846" width="190" height="64" rx="8"></rect>
+          <text class="label" x="417" y="872">ReAct</text>
+          <text class="sub" x="417" y="893" text-anchor="middle">工具循环</text>
+        </g>
+        <g class="node mode">
+          <rect x="562" y="846" width="190" height="64" rx="8"></rect>
+          <text class="label" x="657" y="872">Plan &amp; Execute</text>
+          <text class="sub" x="657" y="893" text-anchor="middle">复杂目标</text>
+        </g>
+        <g class="node mode">
+          <rect x="802" y="846" width="190" height="64" rx="8"></rect>
+          <text class="label" x="897" y="872">Multi-Agent</text>
+          <text class="sub" x="897" y="893" text-anchor="middle">专业分工</text>
+        </g>
+
+        <g class="node neutral">
+          <rect x="500" y="950" width="240" height="52" rx="8"></rect>
+          <text class="label" x="620" y="976">execution_result</text>
+        </g>
+
+        <g class="node guard">
+          <rect x="500" y="1040" width="240" height="58" rx="8"></rect>
+          <text class="label" x="620" y="1064">output_guard</text>
+          <text class="sub" x="620" y="1084" text-anchor="middle">脱敏 / 格式 / 事实检查</text>
+        </g>
+
+        <g class="node router">
+          <path d="M620 1120 L732 1170 L620 1220 L508 1170 Z"></path>
+          <text class="label" x="620" y="1170">need_reflection?</text>
+        </g>
+
+        <g class="node mode">
+          <rect x="830" y="1142" width="200" height="58" rx="8"></rect>
+          <text class="label" x="930" y="1166">Reflection</text>
+          <text class="sub" x="930" y="1186" text-anchor="middle">评估 / 修正 / PASS</text>
+        </g>
+
+        <g class="node danger">
+          <rect x="1048" y="1142" width="170" height="58" rx="8"></rect>
+          <text class="label" x="1133" y="1166">fallback</text>
+          <text class="sub" x="1133" y="1186" text-anchor="middle">部分结果 / 解释</text>
+        </g>
+
+        <g class="node guard">
+          <rect x="500" y="1270" width="240" height="58" rx="8"></rect>
+          <text class="label" x="620" y="1294">memory_guard</text>
+          <text class="sub" x="620" y="1314" text-anchor="middle">长期记忆写入前护栏</text>
+        </g>
+
+        <g class="node memory">
+          <rect x="258" y="1274" width="170" height="50" rx="8"></rect>
+          <text class="label" x="343" y="1299">memory_write</text>
+        </g>
+
+        <g class="node neutral">
+          <rect x="500" y="1370" width="240" height="50" rx="8"></rect>
+          <text class="label" x="620" y="1395">final_answer</text>
+        </g>
+
+        <g class="node trace">
+          <rect x="800" y="1370" width="158" height="50" rx="8"></rect>
+          <text class="label" x="879" y="1395">on_agent_end</text>
+        </g>
+
+        <path class="edge" d="M620 96 L620 128"></path>
+        <path class="edge" d="M620 182 L620 252"></path>
+        <path class="edge" d="M620 314 L620 348"></path>
+        <path class="edge" d="M620 404 L620 466"></path>
+        <path class="edge" d="M620 524 L620 574"></path>
+        <path class="edge" d="M620 630 L620 668"></path>
+
+        <path class="edge-dashed" d="M500 283 L384 283"></path>
+        <text class="edge-label" x="430" y="270">block</text>
+        <path class="edge-dashed" d="M274 314 L274 348"></path>
+
+        <path class="edge-soft" d="M740 495 L818 495"></path>
+        <text class="edge-label" x="775" y="482">too long</text>
+        <path class="edge-soft" d="M928 524 C928 560 780 602 740 602"></path>
+        <text class="edge-label" x="821" y="576">compressed</text>
+
+        <path class="edge" d="M620 804 L620 816"></path>
+        <path class="bus" d="M177 816 L897 816"></path>
+        <path class="edge-soft" d="M177 816 L177 846"></path>
+        <path class="edge-soft" d="M417 816 L417 846"></path>
+        <path class="edge-soft" d="M657 816 L657 846"></path>
+        <path class="edge-soft" d="M897 816 L897 846"></path>
+
+        <path class="bus" d="M177 930 L897 930"></path>
+        <path class="edge-soft" d="M177 910 L177 930"></path>
+        <path class="edge-soft" d="M417 910 L417 930"></path>
+        <path class="edge-soft" d="M657 910 L657 930"></path>
+        <path class="edge-soft" d="M897 910 L897 930"></path>
+        <path class="edge" d="M620 930 L620 950"></path>
+
+        <path class="edge" d="M620 1002 L620 1040"></path>
+        <path class="edge" d="M620 1098 L620 1120"></path>
+        <path class="edge" d="M732 1170 L830 1171"></path>
+        <text class="edge-label" x="772" y="1156">yes</text>
+        <path class="edge" d="M620 1220 L620 1270"></path>
+        <text class="edge-label" x="584" y="1248">no</text>
+        <path class="edge" d="M930 1200 L930 1234 L740 1234 L740 1299"></path>
+        <text class="edge-label" x="842" y="1218">PASS</text>
+        <path class="edge-dashed" d="M1030 1171 L1048 1171"></path>
+        <text class="edge-label" x="1038" y="1156">FAIL</text>
+        <path class="edge-dashed" d="M1133 1200 L1133 1395 L958 1395"></path>
+
+        <path class="edge" d="M500 1299 L428 1299"></path>
+        <text class="edge-label" x="462" y="1284">write</text>
+        <path class="edge" d="M343 1324 L343 1395 L500 1395"></path>
+        <path class="edge" d="M620 1328 L620 1370"></path>
+        <text class="edge-label" x="584" y="1350">skip</text>
+        <path class="edge" d="M740 1395 L800 1395"></path>
+      </svg>
+    </section>
+
+    <section class="diagram-panel">
+      <div class="panel-title">
+        <h2>2. Hooks / Guardrails / Trace</h2>
+        <p>Hooks 不是业务流程节点，而是每个关键边界发出的生命周期事件。</p>
+      </div>
+      <svg viewBox="0 0 1240 500" role="img" aria-label="Hooks Guardrails Trace 横切图">
+        <defs>
+          <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+          </marker>
+        </defs>
+
+        <g class="node neutral">
+          <rect x="70" y="206" width="180" height="58" rx="8"></rect>
+          <text class="label" x="160" y="231">LangGraph Node</text>
+          <text class="sub" x="160" y="251" text-anchor="middle">router / tool / memory</text>
+        </g>
+        <g class="node trace">
+          <rect x="320" y="206" width="170" height="58" rx="8"></rect>
+          <text class="label" x="405" y="231">emit hook</text>
+          <text class="sub" x="405" y="251" text-anchor="middle">event + context</text>
+        </g>
+        <g class="node router">
+          <rect x="570" y="196" width="190" height="78" rx="8"></rect>
+          <text class="label" x="665" y="226">Hook Registry</text>
+          <text class="sub" x="665" y="246" text-anchor="middle">统一分发</text>
+        </g>
+
+        <g class="node trace">
+          <rect x="860" y="70" width="210" height="62" rx="8"></rect>
+          <text class="label" x="965" y="95">Trace Handler</text>
+          <text class="sub" x="965" y="115" text-anchor="middle">LangSmith / OTel / logs</text>
+        </g>
+        <g class="node guard">
+          <rect x="860" y="308" width="210" height="62" rx="8"></rect>
+          <text class="label" x="965" y="333">Guardrail Handler</text>
+          <text class="sub" x="965" y="353" text-anchor="middle">allow / block / clarify</text>
+        </g>
+        <g class="node danger">
+          <rect x="1105" y="308" width="140" height="62" rx="8"></rect>
+          <text class="label" x="1175" y="333">Policy Result</text>
+          <text class="sub" x="1175" y="353" text-anchor="middle">decision</text>
+        </g>
+
+        <path class="edge" style="marker-end:url(#arrow2)" d="M250 235 L320 235"></path>
+        <path class="edge" style="marker-end:url(#arrow2)" d="M490 235 L570 235"></path>
+        <path class="edge" style="marker-end:url(#arrow2)" d="M760 226 C810 160 830 103 860 101"></path>
+        <path class="edge" style="marker-end:url(#arrow2)" d="M760 246 C810 290 828 339 860 339"></path>
+        <path class="edge" style="marker-end:url(#arrow2)" d="M1070 339 L1105 339"></path>
+
+        <text class="caption" x="102" y="350">订阅全部事件</text>
+        <path class="edge-soft" style="marker-end:url(#arrow2)" d="M160 340 C300 420 820 430 965 370"></path>
+        <text class="caption" x="102" y="382">只在关键边界做拦截</text>
+
+        <g class="node trace">
+          <rect x="210" y="40" width="150" height="40" rx="8"></rect>
+          <text class="label" x="285" y="60">agent_start</text>
+        </g>
+        <g class="node trace">
+          <rect x="378" y="40" width="150" height="40" rx="8"></rect>
+          <text class="label" x="453" y="60">before_route</text>
+        </g>
+        <g class="node trace">
+          <rect x="546" y="40" width="150" height="40" rx="8"></rect>
+          <text class="label" x="621" y="60">before_tool</text>
+        </g>
+        <g class="node trace">
+          <rect x="714" y="40" width="150" height="40" rx="8"></rect>
+          <text class="label" x="789" y="60">before_memory</text>
+        </g>
+      </svg>
+    </section>
+
+    <div class="small-grid">
+      <section class="diagram-panel">
+        <div class="panel-title">
+          <h2>3. ReAct 子流程</h2>
+          <p>工具循环只在子图里回环。</p>
+        </div>
+        <svg viewBox="0 0 640 520" role="img" aria-label="ReAct 子流程">
+          <defs>
+            <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+            </marker>
+          </defs>
+          <g class="node neutral"><rect x="248" y="24" width="144" height="42" rx="8"></rect><text class="label" x="320" y="45">ReAct START</text></g>
+          <g class="node trace"><rect x="220" y="96" width="200" height="48" rx="8"></rect><text class="label" x="320" y="120">before_model</text></g>
+          <g class="node router"><rect x="220" y="174" width="200" height="48" rx="8"></rect><text class="label" x="320" y="198">llm_reason</text></g>
+          <g class="node router"><path d="M320 258 L422 318 L320 378 L218 318 Z"></path><text class="label" x="320" y="318">decision</text></g>
+          <g class="node guard"><rect x="82" y="408" width="160" height="48" rx="8"></rect><text class="label" x="162" y="432">tool_guard</text></g>
+          <g class="node mode"><rect x="312" y="408" width="160" height="48" rx="8"></rect><text class="label" x="392" y="432">tool_executor</text></g>
+          <g class="node memory"><rect x="312" y="478" width="160" height="48" rx="8"></rect><text class="label" x="392" y="502">observation</text></g>
+          <g class="node danger"><rect x="500" y="288" width="126" height="48" rx="8"></rect><text class="label" x="563" y="312">fallback</text></g>
+          <g class="node neutral"><rect x="500" y="160" width="126" height="48" rx="8"></rect><text class="label" x="563" y="184">END</text></g>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M320 66 L320 96"></path>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M320 144 L320 174"></path>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M320 222 L320 258"></path>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M218 318 C160 350 162 380 162 408"></path>
+          <text class="edge-label" x="148" y="356">tool</text>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M242 432 L312 432"></path>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M392 456 L392 478"></path>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M392 478 C540 458 530 120 420 120"></path>
+          <text class="edge-label" x="540" y="242">continue</text>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M422 318 L500 312"></path>
+          <text class="edge-label" x="460" y="300">invalid</text>
+          <path class="edge" style="marker-end:url(#arrow3)" d="M398 288 C462 250 500 205 500 184"></path>
+          <text class="edge-label" x="444" y="236">final</text>
+        </svg>
+      </section>
+
+      <section class="diagram-panel">
+        <div class="panel-title">
+          <h2>4. Plan &amp; Execute</h2>
+          <p>先规划，再执行，再逐步验收。</p>
+        </div>
+        <svg viewBox="0 0 640 520" role="img" aria-label="Plan and Execute 子流程">
+          <defs>
+            <marker id="arrow4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+            </marker>
+          </defs>
+          <g class="node neutral"><rect x="250" y="24" width="140" height="42" rx="8"></rect><text class="label" x="320" y="45">Plan START</text></g>
+          <g class="node router"><rect x="228" y="94" width="184" height="48" rx="8"></rect><text class="label" x="320" y="118">planner</text></g>
+          <g class="node guard"><rect x="228" y="170" width="184" height="48" rx="8"></rect><text class="label" x="320" y="194">plan_validate</text></g>
+          <g class="node router"><path d="M320 246 L410 300 L320 354 L230 300 Z"></path><text class="label" x="320" y="300">valid?</text></g>
+          <g class="node mode"><rect x="64" y="396" width="140" height="48" rx="8"></rect><text class="label" x="134" y="420">LLM step</text></g>
+          <g class="node mode"><rect x="230" y="396" width="140" height="48" rx="8"></rect><text class="label" x="300" y="420">Tool step</text></g>
+          <g class="node mode"><rect x="396" y="396" width="140" height="48" rx="8"></rect><text class="label" x="466" y="420">Agent step</text></g>
+          <g class="node memory"><rect x="230" y="468" width="140" height="48" rx="8"></rect><text class="label" x="300" y="492">step_eval</text></g>
+          <g class="node danger"><rect x="466" y="278" width="116" height="48" rx="8"></rect><text class="label" x="524" y="302">fallback</text></g>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M320 66 L320 94"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M320 142 L320 170"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M320 218 L320 246"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M410 300 L466 302"></path>
+          <text class="edge-label" x="432" y="286">no</text>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M288 332 C222 360 160 370 134 396"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M320 354 L300 396"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M352 332 C410 360 448 370 466 396"></path>
+          <text class="edge-label" x="356" y="372">yes</text>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M134 444 C170 475 220 492 230 492"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M300 444 L300 468"></path>
+          <path class="edge" style="marker-end:url(#arrow4)" d="M466 444 C430 475 380 492 370 492"></path>
+          <path class="edge-dashed" style="marker-end:url(#arrow4)" d="M230 492 C88 460 72 306 230 300"></path>
+          <text class="edge-label" x="98" y="352">next step</text>
+        </svg>
+      </section>
+
+      <section class="diagram-panel">
+        <div class="panel-title">
+          <h2>5. Multi-Agent</h2>
+          <p>中心编排，Worker 专业分工。</p>
+        </div>
+        <svg viewBox="0 0 640 500" role="img" aria-label="Multi-Agent 子流程">
+          <defs>
+            <marker id="arrow5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+            </marker>
+          </defs>
+          <g class="node neutral"><rect x="238" y="24" width="164" height="42" rx="8"></rect><text class="label" x="320" y="45">Multi START</text></g>
+          <g class="node router"><rect x="220" y="96" width="200" height="52" rx="8"></rect><text class="label" x="320" y="122">orchestrator</text></g>
+          <g class="node router"><rect x="220" y="178" width="200" height="52" rx="8"></rect><text class="label" x="320" y="204">agent_router</text></g>
+          <g class="node mode"><rect x="42" y="286" width="126" height="48" rx="8"></rect><text class="label" x="105" y="310">Researcher</text></g>
+          <g class="node mode"><rect x="190" y="286" width="126" height="48" rx="8"></rect><text class="label" x="253" y="310">Coder</text></g>
+          <g class="node mode"><rect x="338" y="286" width="126" height="48" rx="8"></rect><text class="label" x="401" y="310">Reviewer</text></g>
+          <g class="node mode"><rect x="486" y="286" width="126" height="48" rx="8"></rect><text class="label" x="549" y="310">Memory</text></g>
+          <g class="node memory"><rect x="220" y="400" width="200" height="52" rx="8"></rect><text class="label" x="320" y="426">aggregate</text></g>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M320 66 L320 96"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M320 148 L320 178"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M260 230 C210 254 132 260 105 286"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M300 230 L253 286"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M340 230 L401 286"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M380 230 C440 254 520 260 549 286"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M105 334 C140 382 220 410 220 426"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M253 334 C270 368 300 382 300 400"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M401 334 C382 368 342 382 340 400"></path>
+          <path class="edge" style="marker-end:url(#arrow5)" d="M549 334 C500 382 420 410 420 426"></path>
+          <path class="edge-dashed" style="marker-end:url(#arrow5)" d="M420 426 C570 370 570 118 420 122"></path>
+          <text class="edge-label" x="536" y="252">conflict / more work</text>
+        </svg>
+      </section>
+
+      <section class="diagram-panel">
+        <div class="panel-title">
+          <h2>6. Reflection</h2>
+          <p>只负责质量检查和有限轮修正。</p>
+        </div>
+        <svg viewBox="0 0 640 500" role="img" aria-label="Reflection 子流程">
+          <defs>
+            <marker id="arrow6" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#6f7f95"></path>
+            </marker>
+          </defs>
+          <g class="node neutral"><rect x="230" y="44" width="180" height="46" rx="8"></rect><text class="label" x="320" y="67">Reflection START</text></g>
+          <g class="node guard"><rect x="220" y="130" width="200" height="58" rx="8"></rect><text class="label" x="320" y="154">evaluator</text><text class="sub" x="320" y="174" text-anchor="middle">事实 / 约束 / 格式</text></g>
+          <g class="node router"><path d="M320 228 L420 290 L320 352 L220 290 Z"></path><text class="label" x="320" y="290">PASS?</text></g>
+          <g class="node memory"><rect x="82" y="390" width="142" height="52" rx="8"></rect><text class="label" x="153" y="416">PASS</text></g>
+          <g class="node mode"><rect x="270" y="390" width="142" height="52" rx="8"></rect><text class="label" x="341" y="416">revise</text></g>
+          <g class="node danger"><rect x="458" y="390" width="142" height="52" rx="8"></rect><text class="label" x="529" y="416">FAIL</text></g>
+          <path class="edge" style="marker-end:url(#arrow6)" d="M320 90 L320 130"></path>
+          <path class="edge" style="marker-end:url(#arrow6)" d="M320 188 L320 228"></path>
+          <path class="edge" style="marker-end:url(#arrow6)" d="M252 326 C210 356 168 370 153 390"></path>
+          <text class="edge-label" x="196" y="354">yes</text>
+          <path class="edge" style="marker-end:url(#arrow6)" d="M320 352 L341 390"></path>
+          <text class="edge-label" x="350" y="366">no</text>
+          <path class="edge-dashed" style="marker-end:url(#arrow6)" d="M341 390 C470 296 474 162 420 158"></path>
+          <text class="edge-label" x="488" y="250">under max rounds</text>
+          <path class="edge" style="marker-end:url(#arrow6)" d="M388 326 C444 356 512 370 529 390"></path>
+          <text class="edge-label" x="492" y="354">max rounds</text>
+        </svg>
+      </section>
+    </div>
+
+    <div class="text-grid">
+      <section class="text-panel">
+        <h2>State Contract</h2>
+        <ul>
+          <li>user_id / thread_id / run_id</li>
+          <li>messages / user_goal / intent</li>
+          <li>execution_mode / plan / current_step</li>
+          <li>tool_calls / observations</li>
+          <li>retrieved_memories / memory_candidates</li>
+          <li>agent_results / reflection_round</li>
+          <li>guardrail_results / trace_context</li>
+          <li>errors / budget / final_answer</li>
+        </ul>
+      </section>
+
+      <section class="text-panel">
+        <h2>Guardrail Boundaries</h2>
+        <ul>
+          <li>input_guard: 身份、权限、注入、敏感请求</li>
+          <li>route_guard: 模式选择前的策略判断</li>
+          <li>tool_guard: 工具权限、schema、高风险确认</li>
+          <li>output_guard: 脱敏、越权、格式、事实检查</li>
+          <li>memory_guard: 长期记忆写入前的价值与隐私检查</li>
+        </ul>
+      </section>
+
+      <section class="text-panel">
+        <h2>Trace Payload</h2>
+        <ul>
+          <li>run_id / thread_id / user_id</li>
+          <li>node_name / event_name / step_id</li>
+          <li>agent_name / tool_name / model_name</li>
+          <li>input_summary / output_summary</li>
+          <li>latency_ms / token_usage / cost</li>
+          <li>guardrail_decision / error_type / error_message</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
