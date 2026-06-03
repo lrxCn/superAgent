@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 7 |
+| Completed | 8 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 08 - Direct answer path.
+**Recommended next task**: 09 - MCP tools and ReAct loop.
 
 ## Task List
 
@@ -26,7 +26,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 05 | [Graphiti long-term memory client](./prompts/05-graphiti-long-term-memory.md) | ✅ 完成 | 2026-06-03 | Added Graphiti long-term memory client boundary, mock fallback, and OrbStack runbook |
 | 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ✅ 完成 | 2026-06-03 | Added deterministic context budget estimation and compression |
 | 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ✅ 完成 | 2026-06-03 | Added structured route decisions and graph placeholder paths |
-| 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ⬜ 待开始 | - | Depends on 03, 07 |
+| 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ✅ 完成 | 2026-06-03 | Added LLM-backed direct answer node with fake-client tests and graph integration |
 | 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ⬜ 待开始 | - | Depends on 03, 07 |
 | 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ⬜ 待开始 | - | Depends on 03, 07, 09 |
 | 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ⬜ 待开始 | - | Depends on 03, 07, 10 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 08 direct answer path: added direct-answer prompt construction, LLM adapter usage with fake-client injection, fallback handling for LLM errors, and unit/integration coverage. |
 | 2026-06-03 | Completed task 07 intent and complexity router: deterministic direct/tool/plan/multi-agent/fallback routing, observable signals/confidence/reasons, reflection flag, graph conditional paths, and tests. |
 | 2026-06-03 | Completed task 06 context budget and compression: deterministic token estimation, protected current goal/system/recent context, high-value memory filtering, graph compression branch, and unit coverage. |
 | 2026-06-03 | Completed task 05 Graphiti long-term memory client: HTTP/MCP client boundary, mock fallback, optional graphiti smoke test, and OrbStack runbook. |

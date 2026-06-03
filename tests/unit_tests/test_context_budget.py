@@ -8,6 +8,7 @@ from agent.context_budget import (
     estimate_state_tokens,
     estimate_tokens,
 )
+from agent.llm import FakeLLMClient
 from agent.state import AgentState
 
 
@@ -116,7 +117,9 @@ async def test_graph_compresses_over_budget_context_before_routing(monkeypatch) 
 
     graph_module = importlib.import_module("agent.graph")
     monkeypatch.setattr(graph_module, "load_config", lambda: SmallBudgetConfig())
-    graph = graph_module.build_graph()
+    graph = graph_module.build_graph(
+        llm_client=FakeLLMClient(responses=["compressed direct answer"])
+    )
     result = await graph.ainvoke(
         {
             "messages": [
@@ -138,6 +141,4 @@ async def test_graph_compresses_over_budget_context_before_routing(monkeypatch) 
     assert result["context_budget"]["limit"] == 12
     assert result["memory_context"]["short_term"] == ["High: preserve this memory"]
     assert result["messages"][-1]["content"] == "current goal must survive"
-    assert result["final_answer"] == (
-        "SuperAgent runtime skeleton received: current goal must survive"
-    )
+    assert result["final_answer"] == "compressed direct answer"

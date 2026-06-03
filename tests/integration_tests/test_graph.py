@@ -1,6 +1,9 @@
 import pytest
 
-from agent import graph
+from agent.graph import build_graph
+from agent.llm import FakeLLMClient
+
+graph = build_graph(llm_client=FakeLLMClient(responses=["direct fake answer"]))
 
 pytestmark = pytest.mark.anyio
 
@@ -10,7 +13,7 @@ async def test_agent_simple_passthrough() -> None:
     res = await graph.ainvoke(inputs)
     assert res["intent_decision"]["path"] == "direct_answer"
     assert res["memory_write_result"]["status"] == "skipped"
-    assert res["final_answer"] == "SuperAgent runtime skeleton received: some request"
+    assert res["final_answer"] == "direct fake answer"
     assert "changeme" not in res
 
 

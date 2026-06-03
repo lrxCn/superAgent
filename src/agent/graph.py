@@ -9,12 +9,13 @@ from langgraph.graph import END, StateGraph
 
 from agent.config import load_config
 from agent.context_budget import check_context_budget, compress_state_context
+from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
+from agent.nodes.direct import create_direct_answer_node
 from agent.router import route_intent
 from agent.state import (
     AgentResult,
     AgentState,
-    Evaluation,
     MemoryContext,
     MemoryWriteResult,
     Observation,
@@ -25,13 +26,6 @@ from agent.state import (
 
 def _runtime_config(state: AgentState) -> RuntimeConfig:
     return state.get("runtime_config") or load_config().to_runtime_config()
-
-
-def _message_text(state: AgentState) -> str:
-    messages = state.get("messages") or []
-    if not messages:
-        return ""
-    return messages[-1]["content"]
 
 
 async def intake(state: AgentState) -> AgentState:
@@ -96,29 +90,6 @@ def choose_execution_path(state: AgentState) -> Literal[
     if not decision:
         return "fallback"
     return decision["path"]
-
-
-async def direct_answer(state: AgentState) -> AgentState:
-    """Direct-answer placeholder without calling an LLM."""
-    user_text = _message_text(state)
-    answer = (
-        "SuperAgent runtime skeleton received the request."
-        if not user_text
-        else f"SuperAgent runtime skeleton received: {user_text}"
-    )
-    evaluation: Evaluation = {
-        "enabled": False,
-        "status": "not_required",
-        "issues": [],
-        "suggestions": [],
-    }
-    plan: Plan = {"steps": [], "status": "not_started"}
-    return {
-        "final_answer": state.get("final_answer", answer),
-        "evaluation": state.get("evaluation") or evaluation,
-        "plan": state.get("plan") or plan,
-        "current_step": state.get("current_step"),
-    }
 
 
 async def react_agent(state: AgentState) -> AgentState:
@@ -191,7 +162,7 @@ async def final_answer(state: AgentState) -> AgentState:
     }
 
 
-def create_graph_builder() -> StateGraph[AgentState]:
+def create_graph_builder(llm_client: LLMClient | None = None) -> StateGraph[AgentState]:
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
     graph_builder.add_node("intake", intake)
@@ -199,7 +170,7 @@ def create_graph_builder() -> StateGraph[AgentState]:
     graph_builder.add_node("context_budget", context_budget)
     graph_builder.add_node("compress_memory", compress_memory)
     graph_builder.add_node("intent_router", intent_router)
-    graph_builder.add_node("direct_answer", direct_answer)
+    graph_builder.add_node("direct_answer", create_direct_answer_node(llm_client))
     graph_builder.add_node("react_agent", react_agent)
     graph_builder.add_node("planner", planner)
     graph_builder.add_node("multi_agent_orchestrator", multi_agent_orchestrator)
@@ -237,9 +208,12 @@ def create_graph_builder() -> StateGraph[AgentState]:
     return graph_builder
 
 
-def build_graph(checkpointer: BaseCheckpointSaver | None = None):
+def build_graph(
+    checkpointer: BaseCheckpointSaver | None = None,
+    llm_client: LLMClient | None = None,
+):
     """Compile the graph, optionally with a checkpointer."""
-    return create_graph_builder().compile(
+    return create_graph_builder(llm_client).compile(
         checkpointer=checkpointer,
         name="SuperAgent Runtime Skeleton",
     )
