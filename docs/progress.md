@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 8 |
+| Completed | 9 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 09 - MCP tools and ReAct loop.
+**Recommended next task**: 10 - Plan-and-Execute path.
 
 ## Task List
 
@@ -27,7 +27,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ✅ 完成 | 2026-06-03 | Added deterministic context budget estimation and compression |
 | 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ✅ 完成 | 2026-06-03 | Added structured route decisions and graph placeholder paths |
 | 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ✅ 完成 | 2026-06-03 | Added LLM-backed direct answer node with fake-client tests and graph integration |
-| 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ⬜ 待开始 | - | Depends on 03, 07 |
+| 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ✅ 完成 | 2026-06-03 | Added MCP adapter, bounded ReAct loop, tool observation sanitization, and mock coverage |
 | 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ⬜ 待开始 | - | Depends on 03, 07, 09 |
 | 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ⬜ 待开始 | - | Depends on 03, 07, 10 |
 | 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ⬜ 待开始 | - | Depends on 08, 09, 10, 11 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 09 MCP tools and ReAct loop: MCP client adapter with stdio/URL config, tool discovery/call protocol, observation sanitization, bounded ReAct node, graph integration, and mock tests. |
 | 2026-06-03 | Completed task 08 direct answer path: added direct-answer prompt construction, LLM adapter usage with fake-client injection, fallback handling for LLM errors, and unit/integration coverage. |
 | 2026-06-03 | Completed task 07 intent and complexity router: deterministic direct/tool/plan/multi-agent/fallback routing, observable signals/confidence/reasons, reflection flag, graph conditional paths, and tests. |
 | 2026-06-03 | Completed task 06 context budget and compression: deterministic token estimation, protected current goal/system/recent context, high-value memory filtering, graph compression branch, and unit coverage. |

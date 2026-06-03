@@ -13,6 +13,7 @@ dependencies = [
     "langchain-openai>=1.0.0",
     "langgraph-checkpoint-postgres>=3.0.0",
     "langgraph>=1.0.0",
+    "mcp>=1.27.2",
     "psycopg[binary,pool]>=3.2.0",
     "python-dotenv>=1.0.1",
 ]
@@ -26,7 +27,7 @@ requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["agent", "agent.memory", "agent.nodes"]
+packages = ["agent", "agent.memory", "agent.nodes", "agent.tools"]
 [tool.setuptools.package-dir]
 "agent" = "src/agent"
 
@@ -62,6 +63,7 @@ convention = "google"
 markers = [
     "graphiti: tests that require a reachable local Graphiti service",
     "postgres: tests that require a reachable PostgreSQL database",
+    "mcp: tests that require a reachable MCP server",
 ]
 
 [dependency-groups]

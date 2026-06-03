@@ -12,16 +12,17 @@ from agent.context_budget import check_context_budget, compress_state_context
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.nodes.direct import create_direct_answer_node
+from agent.nodes.react import create_react_node
 from agent.router import route_intent
 from agent.state import (
     AgentResult,
     AgentState,
     MemoryContext,
     MemoryWriteResult,
-    Observation,
     Plan,
     RuntimeConfig,
 )
+from agent.tools.mcp import MCPClient
 
 
 def _runtime_config(state: AgentState) -> RuntimeConfig:
@@ -92,20 +93,6 @@ def choose_execution_path(state: AgentState) -> Literal[
     return decision["path"]
 
 
-async def react_agent(state: AgentState) -> AgentState:
-    """Tool path placeholder until the MCP/ReAct task implements execution."""
-    observation: Observation = {
-        "source": "react_agent",
-        "content": "ReAct tool path selected by intent router.",
-        "error": None,
-    }
-    return {
-        "observations": [*state.get("observations", []), observation],
-        "final_answer": state.get("final_answer")
-        or "ReAct agent path selected; tool execution is not implemented yet.",
-    }
-
-
 async def planner(state: AgentState) -> AgentState:
     """Planner path placeholder until plan-and-execute is implemented."""
     plan: Plan = {"steps": [], "status": "pending"}
@@ -162,7 +149,10 @@ async def final_answer(state: AgentState) -> AgentState:
     }
 
 
-def create_graph_builder(llm_client: LLMClient | None = None) -> StateGraph[AgentState]:
+def create_graph_builder(
+    llm_client: LLMClient | None = None,
+    mcp_client: MCPClient | None = None,
+) -> StateGraph[AgentState]:
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
     graph_builder.add_node("intake", intake)
@@ -171,7 +161,10 @@ def create_graph_builder(llm_client: LLMClient | None = None) -> StateGraph[Agen
     graph_builder.add_node("compress_memory", compress_memory)
     graph_builder.add_node("intent_router", intent_router)
     graph_builder.add_node("direct_answer", create_direct_answer_node(llm_client))
-    graph_builder.add_node("react_agent", react_agent)
+    graph_builder.add_node(
+        "react_agent",
+        create_react_node(llm_client=llm_client, mcp_client=mcp_client),
+    )
     graph_builder.add_node("planner", planner)
     graph_builder.add_node("multi_agent_orchestrator", multi_agent_orchestrator)
     graph_builder.add_node("fallback", fallback)
@@ -211,9 +204,10 @@ def create_graph_builder(llm_client: LLMClient | None = None) -> StateGraph[Agen
 def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     llm_client: LLMClient | None = None,
+    mcp_client: MCPClient | None = None,
 ):
     """Compile the graph, optionally with a checkpointer."""
-    return create_graph_builder(llm_client).compile(
+    return create_graph_builder(llm_client, mcp_client).compile(
         checkpointer=checkpointer,
         name="SuperAgent Runtime Skeleton",
     )
