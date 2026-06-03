@@ -12,6 +12,7 @@ from agent.context_budget import check_context_budget, compress_state_context
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.nodes.direct import create_direct_answer_node
+from agent.nodes.orchestrator import create_multi_agent_orchestrator_node
 from agent.nodes.planner import (
     choose_plan_execution_path,
     choose_plan_validate_path,
@@ -23,13 +24,13 @@ from agent.nodes.planner import (
 from agent.nodes.react import create_react_node
 from agent.router import route_intent
 from agent.state import (
-    AgentResult,
     AgentState,
     MemoryContext,
     MemoryWriteResult,
     RuntimeConfig,
 )
 from agent.tools.mcp import MCPClient
+from agent.workers.registry import WorkerRegistry
 
 
 def _runtime_config(state: AgentState) -> RuntimeConfig:
@@ -100,21 +101,6 @@ def choose_execution_path(state: AgentState) -> Literal[
     return decision["path"]
 
 
-async def multi_agent_orchestrator(state: AgentState) -> AgentState:
-    """Multi-agent path placeholder until worker orchestration is implemented."""
-    result: AgentResult = {
-        "agent_name": "orchestrator",
-        "status": "skipped",
-        "output": "Multi-agent path selected by intent router.",
-        "confidence": state.get("intent_decision", {}).get("confidence", 0.0),
-    }
-    return {
-        "agent_results": [*state.get("agent_results", []), result],
-        "final_answer": state.get("final_answer")
-        or "Multi-agent path selected; worker orchestration is not implemented yet.",
-    }
-
-
 async def fallback(state: AgentState) -> AgentState:
     """Fallback placeholder for later routing and safety tasks."""
     decision = state.get("intent_decision")
@@ -149,6 +135,7 @@ async def final_answer(state: AgentState) -> AgentState:
 def create_graph_builder(
     llm_client: LLMClient | None = None,
     mcp_client: MCPClient | None = None,
+    worker_registry: object | None = None,
 ) -> StateGraph[AgentState]:
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
@@ -169,7 +156,10 @@ def create_graph_builder(
         create_execute_plan_node(llm_client=llm_client, mcp_client=mcp_client),
     )
     graph_builder.add_node("step_observe", create_step_observe_node())
-    graph_builder.add_node("multi_agent_orchestrator", multi_agent_orchestrator)
+    orchestrator_node = create_multi_agent_orchestrator_node(
+        registry=worker_registry if isinstance(worker_registry, WorkerRegistry) else None,
+    )
+    graph_builder.add_node("multi_agent_orchestrator", orchestrator_node)
     graph_builder.add_node("fallback", fallback)
     graph_builder.add_node("memory_write", memory_write)
     graph_builder.add_node("final_answer", final_answer)
@@ -219,9 +209,10 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     llm_client: LLMClient | None = None,
     mcp_client: MCPClient | None = None,
+    worker_registry: object | None = None,
 ):
     """Compile the graph, optionally with a checkpointer."""
-    return create_graph_builder(llm_client, mcp_client).compile(
+    return create_graph_builder(llm_client, mcp_client, worker_registry).compile(
         checkpointer=checkpointer,
         name="SuperAgent Runtime Skeleton",
     )

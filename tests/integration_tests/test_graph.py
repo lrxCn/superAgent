@@ -70,7 +70,7 @@ async def test_agent_simple_passthrough() -> None:
         (
             "Use researcher, coder, and reviewer agents in parallel.",
             "multi_agent_orchestrator",
-            "Multi-agent path selected; worker orchestration is not implemented yet.",
+            "Multi-agent orchestration",
         ),
         (
             "help",
@@ -96,7 +96,10 @@ async def test_agent_routes_to_placeholder_paths(
         assert res["plan"]["status"] == "completed"
         assert expected_answer in res["final_answer"]
     else:
-        assert res["final_answer"] == expected_answer
+        assert expected_answer in res["final_answer"]
+        if expected_path == "multi_agent_orchestrator":
+            assert res["agent_results"][0]["agent_name"] == "orchestrator"
+            assert res["agent_results"][0]["status"] in {"completed", "partial"}
 
 
 async def test_agent_routes_tool_request_through_react_loop() -> None:

@@ -129,6 +129,8 @@ class AgentResult(TypedDict):
     status: Literal["completed", "partial", "failed", "skipped"]
     output: str
     confidence: float
+    error: NotRequired[str | None]
+    role: NotRequired[str]
 
 
 class Evaluation(TypedDict):
