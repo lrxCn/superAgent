@@ -140,6 +140,10 @@ class Evaluation(TypedDict):
     status: Literal["not_required", "pass", "fail"]
     issues: list[str]
     suggestions: list[str]
+    round: NotRequired[int]
+    requires_revision: NotRequired[bool]
+    gate_reasons: NotRequired[list[str]]
+    skip_reason: NotRequired[str | None]
 
 
 class MemoryWriteResult(TypedDict):
@@ -168,6 +172,8 @@ class AgentState(TypedDict, total=False):
     observations: list[Observation]
     agent_results: list[AgentResult]
     evaluation: Evaluation
+    reflection_round: NotRequired[int]
+    reflection_exhausted: NotRequired[bool]
     fallback_reason: str | None
     memory_write_result: MemoryWriteResult
     final_answer: str

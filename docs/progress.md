@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 11 |
+| Completed | 12 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 12 - Reflection evaluator and revise.
+**Recommended next task**: 13 - Memory write policies.
 
 ## Task List
 
@@ -30,7 +30,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ✅ 完成 | 2026-06-03 | Added MCP adapter, bounded ReAct loop, tool observation sanitization, and mock coverage |
 | 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ✅ 完成 | 2026-06-03 | Added plan schema/validation, deterministic planner, step execution loop with LLM/tool support, graph integration, and tests |
 | 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ✅ 完成 | 2026-06-03 | Added worker protocol/mock registry, parallel orchestrator with timeout/concurrency, graph wiring, and tests |
-| 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ⬜ 待开始 | - | Depends on 08, 09, 10, 11 |
+| 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ✅ 完成 | 2026-06-03 | Added reflection gate with explainable skip/enable reasons, rule-based evaluator, revise loop with max rounds, graph wiring, and unit/integration tests |
 | 13 | [Memory write policies](./prompts/13-memory-write-policies.md) | ⬜ 待开始 | - | Depends on 04, 05, 12 |
 | 14 | [Observability and path metrics](./prompts/14-observability-path-metrics.md) | ⬜ 待开始 | - | Depends on 07, 09, 10, 11, 12, 13 |
 | 15 | [Final docs and architecture maps](./prompts/15-final-docs-architecture-maps.md) | ⬜ 待开始 | - | Depends on 01-14 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 12 reflection evaluator and revise: reflection gate with path/confidence/risk/review triggers, rule-based evaluator, deterministic revise, max rounds fallback, graph integration, and tests. |
 | 2026-06-03 | Completed task 11 parallel multi-agent orchestrator: worker contracts, mock workers, parallel execution with timeout/concurrency limits, partial aggregation, graph integration, and unit/integration tests. |
 | 2026-06-03 | Completed task 10 Plan-and-Execute path: plan schema and validation, deterministic planner, execute/observe loop with LLM and MCP tool steps, graph wiring, and unit/integration tests. |
 | 2026-06-03 | Completed task 09 MCP tools and ReAct loop: MCP client adapter with stdio/URL config, tool discovery/call protocol, observation sanitization, bounded ReAct node, graph integration, and mock tests. |

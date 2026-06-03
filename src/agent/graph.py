@@ -22,6 +22,13 @@ from agent.nodes.planner import (
     create_step_observe_node,
 )
 from agent.nodes.react import create_react_node
+from agent.reflection import (
+    choose_evaluator_path,
+    choose_reflection_path,
+    create_evaluator_node,
+    create_reflection_gate_node,
+    create_revise_node,
+)
 from agent.router import route_intent
 from agent.state import (
     AgentState,
@@ -104,15 +111,39 @@ def choose_execution_path(state: AgentState) -> Literal[
 async def fallback(state: AgentState) -> AgentState:
     """Fallback placeholder for later routing and safety tasks."""
     decision = state.get("intent_decision")
+    evaluation = state.get("evaluation") or {
+        "enabled": False,
+        "status": "not_required",
+        "issues": [],
+        "suggestions": [],
+    }
     reason = (
         state.get("fallback_reason")
+        or (
+            "Reflection failed after maximum revision rounds."
+            if evaluation.get("status") == "fail"
+            else None
+        )
         or (decision["reason"] if decision else None)
         or "Fallback path selected."
     )
-    return {
+    partial = state.get("final_answer")
+    issues = evaluation.get("issues", [])
+    if evaluation.get("status") == "fail" and partial:
+        final_answer = (
+            f"{partial}\n\nFallback: quality review did not pass after "
+            f"{state.get('reflection_round', 0)} revision round(s). Issues: "
+            f"{'; '.join(issues) or 'unspecified'}."
+        )
+    else:
+        final_answer = partial or f"Fallback: {reason}"
+    updates: AgentState = {
         "fallback_reason": reason,
-        "final_answer": state.get("final_answer") or f"Fallback: {reason}",
+        "final_answer": final_answer,
     }
+    if evaluation.get("status") == "fail":
+        updates["reflection_exhausted"] = True
+    return updates
 
 
 async def memory_write(state: AgentState) -> AgentState:
@@ -136,6 +167,8 @@ def create_graph_builder(
     llm_client: LLMClient | None = None,
     mcp_client: MCPClient | None = None,
     worker_registry: object | None = None,
+    evaluator: object | None = None,
+    reviser: object | None = None,
 ) -> StateGraph[AgentState]:
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
@@ -161,6 +194,15 @@ def create_graph_builder(
     )
     graph_builder.add_node("multi_agent_orchestrator", orchestrator_node)
     graph_builder.add_node("fallback", fallback)
+    graph_builder.add_node("reflection_gate", create_reflection_gate_node())
+    graph_builder.add_node(
+        "evaluator",
+        create_evaluator_node(evaluator if callable(evaluator) else None),
+    )
+    graph_builder.add_node(
+        "revise",
+        create_revise_node(reviser if callable(reviser) else None),
+    )
     graph_builder.add_node("memory_write", memory_write)
     graph_builder.add_node("final_answer", final_answer)
 
@@ -194,12 +236,23 @@ def create_graph_builder(
     graph_builder.add_conditional_edges(
         "step_observe",
         choose_plan_execution_path,
-        {"execute_plan": "execute_plan", "memory_write": "memory_write"},
+        {"execute_plan": "execute_plan", "memory_write": "reflection_gate"},
     )
-    graph_builder.add_edge("direct_answer", "memory_write")
-    graph_builder.add_edge("react_agent", "memory_write")
-    graph_builder.add_edge("multi_agent_orchestrator", "memory_write")
-    graph_builder.add_edge("fallback", "memory_write")
+    graph_builder.add_edge("direct_answer", "reflection_gate")
+    graph_builder.add_edge("react_agent", "reflection_gate")
+    graph_builder.add_edge("multi_agent_orchestrator", "reflection_gate")
+    graph_builder.add_edge("fallback", "reflection_gate")
+    graph_builder.add_conditional_edges(
+        "reflection_gate",
+        choose_reflection_path,
+        {"evaluator": "evaluator", "memory_write": "memory_write"},
+    )
+    graph_builder.add_conditional_edges(
+        "evaluator",
+        choose_evaluator_path,
+        {"memory_write": "memory_write", "revise": "revise", "fallback": "fallback"},
+    )
+    graph_builder.add_edge("revise", "reflection_gate")
     graph_builder.add_edge("memory_write", "final_answer")
     graph_builder.add_edge("final_answer", END)
     return graph_builder
@@ -210,9 +263,17 @@ def build_graph(
     llm_client: LLMClient | None = None,
     mcp_client: MCPClient | None = None,
     worker_registry: object | None = None,
+    evaluator: object | None = None,
+    reviser: object | None = None,
 ):
     """Compile the graph, optionally with a checkpointer."""
-    return create_graph_builder(llm_client, mcp_client, worker_registry).compile(
+    return create_graph_builder(
+        llm_client,
+        mcp_client,
+        worker_registry,
+        evaluator,
+        reviser,
+    ).compile(
         checkpointer=checkpointer,
         name="SuperAgent Runtime Skeleton",
     )
