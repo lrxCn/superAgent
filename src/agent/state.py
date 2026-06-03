@@ -48,10 +48,14 @@ class MemoryContext(TypedDict):
 class ContextBudget(TypedDict):
     """Estimated context usage and compression status."""
 
-    estimated_tokens: int
-    max_tokens: int
+    limit: int
+    estimated: int
     compressed: bool
     summary: str | None
+    dropped_messages: int
+    dropped_memories: int
+    estimated_tokens: NotRequired[int]
+    max_tokens: NotRequired[int]
 
 
 class IntentDecision(TypedDict):

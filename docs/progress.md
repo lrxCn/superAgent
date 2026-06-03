@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 15 |
-| Completed | 5 |
+| Completed | 6 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: 06 - Context budget and compression.
+**Recommended next task**: 07 - Intent and complexity router.
 
 ## Task List
 
@@ -24,7 +24,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 | 03 | [SiliconFlow LLM adapter](./prompts/03-siliconflow-llm-adapter.md) | ✅ 完成 | 2026-06-03 | Added SiliconFlow/OpenAI-compatible LLM adapter and fake client tests |
 | 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ✅ 完成 | 2026-06-03 | Added optional PostgreSQL checkpointer factory with memory fallback |
 | 05 | [Graphiti long-term memory client](./prompts/05-graphiti-long-term-memory.md) | ✅ 完成 | 2026-06-03 | Added Graphiti long-term memory client boundary, mock fallback, and OrbStack runbook |
-| 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ⬜ 待开始 | - | Depends on 02, 04, 05 |
+| 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ✅ 完成 | 2026-06-03 | Added deterministic context budget estimation and compression |
 | 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ⬜ 待开始 | - | Depends on 02, 03, 06 |
 | 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ⬜ 待开始 | - | Depends on 03, 07 |
 | 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ⬜ 待开始 | - | Depends on 03, 07 |
@@ -39,6 +39,7 @@ Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Completed task 06 context budget and compression: deterministic token estimation, protected current goal/system/recent context, high-value memory filtering, graph compression branch, and unit coverage. |
 | 2026-06-03 | Completed task 05 Graphiti long-term memory client: HTTP/MCP client boundary, mock fallback, optional graphiti smoke test, and OrbStack runbook. |
 | 2026-06-03 | Completed task 04 PostgreSQL checkpoint memory: dependency baseline, async checkpointer factory, graph compile hook, memory fallback, and mock plus optional postgres tests. |
 | 2026-06-03 | Completed task 03 SiliconFlow LLM adapter: centralized OpenAI-compatible client factory, fake LLM client, structured errors, and mock-only tests. |

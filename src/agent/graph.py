@@ -8,10 +8,10 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
 from agent.config import load_config
+from agent.context_budget import check_context_budget, compress_state_context
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.state import (
     AgentState,
-    ContextBudget,
     Evaluation,
     IntentDecision,
     MemoryContext,
@@ -56,15 +56,24 @@ async def load_memory(state: AgentState) -> AgentState:
 
 
 async def context_budget(state: AgentState) -> AgentState:
-    """Estimate placeholder context budget."""
-    message_chars = sum(len(message["content"]) for message in state.get("messages", []))
-    budget: ContextBudget = {
-        "estimated_tokens": max(1, message_chars // 4) if message_chars else 0,
-        "max_tokens": load_config().llm_max_tokens,
-        "compressed": False,
-        "summary": None,
-    }
-    return {"context_budget": state.get("context_budget") or budget}
+    """Estimate context budget before routing."""
+    budget = check_context_budget(state, limit=load_config().llm_max_tokens)
+    return {"context_budget": budget}
+
+
+def choose_context_budget_path(state: AgentState) -> Literal["compress_memory", "ok"]:
+    """Route over-budget state through deterministic compression."""
+    budget = state.get("context_budget")
+    if budget and budget["estimated"] > budget["limit"]:
+        return "compress_memory"
+    return "ok"
+
+
+async def compress_memory(state: AgentState) -> AgentState:
+    """Compress context deterministically without calling an LLM."""
+    budget = state.get("context_budget")
+    limit = budget["limit"] if budget else load_config().llm_max_tokens
+    return compress_state_context(state, limit=limit)
 
 
 async def intent_router(state: AgentState) -> AgentState:
@@ -140,6 +149,7 @@ def create_graph_builder() -> StateGraph[AgentState]:
     graph_builder.add_node("intake", intake)
     graph_builder.add_node("load_memory", load_memory)
     graph_builder.add_node("context_budget", context_budget)
+    graph_builder.add_node("compress_memory", compress_memory)
     graph_builder.add_node("intent_router", intent_router)
     graph_builder.add_node("direct_answer", direct_answer)
     graph_builder.add_node("fallback", fallback)
@@ -149,7 +159,12 @@ def create_graph_builder() -> StateGraph[AgentState]:
     graph_builder.add_edge("__start__", "intake")
     graph_builder.add_edge("intake", "load_memory")
     graph_builder.add_edge("load_memory", "context_budget")
-    graph_builder.add_edge("context_budget", "intent_router")
+    graph_builder.add_conditional_edges(
+        "context_budget",
+        choose_context_budget_path,
+        {"compress_memory": "compress_memory", "ok": "intent_router"},
+    )
+    graph_builder.add_edge("compress_memory", "intent_router")
     graph_builder.add_conditional_edges(
         "intent_router",
         choose_execution_path,
