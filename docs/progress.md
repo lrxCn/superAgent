@@ -6,52 +6,57 @@
 
 | Metric | Value |
 |--------|-------|
-| Total tasks | 15 |
-| Completed | 15 |
+| Phase 1 tasks | 15 / 15 ✅ |
+| Incremental tasks | 0 / 9 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next step**: Maintenance — extend runtime in focused PRs; keep [README.md](../README.md) and [docs/maps/](./maps/) aligned with code.
+**Recommended next task**: [16 - Local services runbooks](./prompts/16-local-services-runbooks.md)
 
-## Task List
+**PRD**: [super-agent-incremental.md](./prd/super-agent-incremental.md) · **Deferred**: [todolist.md](./todolist.md)
+
+## Phase 1 — Runtime (complete)
 
 Status: `⬜ 待开始` · `🔄 进行中` · `✅ 完成` · `⏸ 阻塞` · `⏭ 跳过`
 
 | ID | Task | Status | Completed At | Notes |
 |----|------|--------|--------------|-------|
-| 01 | [Baseline docs and config hygiene](./prompts/01-baseline-docs-config.md) | ✅ 完成 | 2026-06-03 | Established SuperAgent docs/config metadata baseline |
-| 02 | [State schema and graph skeleton](./prompts/02-state-schema-graph-skeleton.md) | ✅ 完成 | 2026-06-03 | Added typed state/config contracts and runnable graph skeleton |
-| 03 | [SiliconFlow LLM adapter](./prompts/03-siliconflow-llm-adapter.md) | ✅ 完成 | 2026-06-03 | Added SiliconFlow/OpenAI-compatible LLM adapter and fake client tests |
-| 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ✅ 完成 | 2026-06-03 | Added optional PostgreSQL checkpointer factory with memory fallback |
-| 05 | [Graphiti long-term memory client](./prompts/05-graphiti-long-term-memory.md) | ✅ 完成 | 2026-06-03 | Added Graphiti long-term memory client boundary, mock fallback, and OrbStack runbook |
-| 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ✅ 完成 | 2026-06-03 | Added deterministic context budget estimation and compression |
-| 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ✅ 完成 | 2026-06-03 | Added structured route decisions and graph placeholder paths |
-| 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ✅ 完成 | 2026-06-03 | Added LLM-backed direct answer node with fake-client tests and graph integration |
-| 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ✅ 完成 | 2026-06-03 | Added MCP adapter, bounded ReAct loop, tool observation sanitization, and mock coverage |
-| 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ✅ 完成 | 2026-06-03 | Added plan schema/validation, deterministic planner, step execution loop with LLM/tool support, graph integration, and tests |
-| 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ✅ 完成 | 2026-06-03 | Added worker protocol/mock registry, parallel orchestrator with timeout/concurrency, graph wiring, and tests |
-| 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ✅ 完成 | 2026-06-03 | Added reflection gate with explainable skip/enable reasons, rule-based evaluator, revise loop with max rounds, graph wiring, and unit/integration tests |
-| 13 | [Memory write policies](./prompts/13-memory-write-policies.md) | ✅ 完成 | 2026-06-03 | Added memory write policies, sensitive filtering, Graphiti write coordination with failure degradation, graph wiring, and unit/integration tests |
-| 14 | [Observability and path metrics](./prompts/14-observability-path-metrics.md) | ✅ 完成 | 2026-06-03 | Added runtime events/path metrics, safe summaries, node instrumentation, LangSmith gating, and unit/integration smoke tests |
-| 15 | [Final docs and architecture maps](./prompts/15-final-docs-architecture-maps.md) | ✅ 完成 | 2026-06-03 | Updated README runtime contract, PRD implementation status, docs/maps (graph, module, state), progress finalization |
+| 01 | [Baseline docs and config hygiene](./prompts/01-baseline-docs-config.md) | ✅ 完成 | 2026-06-03 | 骨架 |
+| 02 | [State schema and graph skeleton](./prompts/02-state-schema-graph-skeleton.md) | ✅ 完成 | 2026-06-03 | 骨架 |
+| 03 | [SiliconFlow LLM adapter](./prompts/03-siliconflow-llm-adapter.md) | ✅ 完成 | 2026-06-03 | 本地可用 |
+| 04 | [PostgreSQL checkpoint memory](./prompts/04-postgres-checkpoint-memory.md) | ✅ 完成 | 2026-06-03 | 骨架（集成 optional） |
+| 05 | [Graphiti long-term memory client](./prompts/05-graphiti-long-term-memory.md) | ✅ 完成 | 2026-06-03 | 骨架（write only；runbook 薄） |
+| 06 | [Context budget and compression](./prompts/06-context-budget-compression.md) | ✅ 完成 | 2026-06-03 | 本地可用 |
+| 07 | [Intent and complexity router](./prompts/07-intent-complexity-router.md) | ✅ 完成 | 2026-06-03 | 本地可用 |
+| 08 | [Direct answer path](./prompts/08-direct-answer-path.md) | ✅ 完成 | 2026-06-03 | 本地可用 |
+| 09 | [MCP tools and ReAct loop](./prompts/09-mcp-tools-react-loop.md) | ✅ 完成 | 2026-06-03 | 骨架（stdio 示例） |
+| 10 | [Plan-and-Execute path](./prompts/10-plan-and-execute.md) | ✅ 完成 | 2026-06-03 | 骨架（agent 步 skip） |
+| 11 | [Parallel multi-agent orchestrator](./prompts/11-parallel-multi-agent.md) | ✅ 完成 | 2026-06-03 | 骨架（mock workers） |
+| 12 | [Reflection evaluator and revise](./prompts/12-reflection-evaluator-revise.md) | ✅ 完成 | 2026-06-03 | 骨架（规则 evaluator） |
+| 13 | [Memory write policies](./prompts/13-memory-write-policies.md) | ✅ 完成 | 2026-06-03 | 骨架 |
+| 14 | [Observability and path metrics](./prompts/14-observability-path-metrics.md) | ✅ 完成 | 2026-06-03 | 本地可用 |
+| 15 | [Final docs and architecture maps](./prompts/15-final-docs-architecture-maps.md) | ✅ 完成 | 2026-06-03 | 文档 |
+
+## Incremental — Local usable runtime
+
+Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
+
+| ID | Task | Status | Completed At | Notes |
+|----|------|--------|--------------|-------|
+| 16 | [Local services runbooks](./prompts/16-local-services-runbooks.md) | ⬜ 待开始 | - | G1 |
+| 17 | [Load memory read](./prompts/17-load-memory-read.md) | ⬜ 待开始 | - | G2；依赖 16 |
+| 18 | [Memory read write loop](./prompts/18-memory-read-write-loop.md) | ⬜ 待开始 | - | G3；依赖 17 |
+| 19 | [Production workers](./prompts/19-production-workers.md) | ⬜ 待开始 | - | G4 |
+| 20 | [Multi MCP and URL transport](./prompts/20-multi-mcp-and-url-transport.md) | ⬜ 待开始 | - | G5 |
+| 21 | [Configurable guardrails](./prompts/21-configurable-guardrails.md) | ⬜ 待开始 | - | G6；依赖 20 |
+| 22 | [LLM evaluator](./prompts/22-llm-evaluator.md) | ⬜ 待开始 | - | G7 |
+| 23 | [Tenant IDs and LangSmith Studio](./prompts/23-tenant-ids-and-langsmith-studio.md) | ⬜ 待开始 | - | G8；依赖 18；无自建 UI |
+| 24 | [Incremental docs closure](./prompts/24-incremental-docs-closure.md) | ⬜ 待开始 | - | G9；依赖 16–23 |
 
 ## Changelog
 
 | Date | Change |
 |------|--------|
-| 2026-06-03 | Completed task 15 final docs and architecture maps: README aligned to implemented runtime, PRD implementation status, docs/maps topology and contracts, progress queue closed (15/15). |
-| 2026-06-03 | Completed task 14 observability and path metrics: structured runtime events, path metrics, safe tool summaries, node instrumentation across control/execution paths, and characterization smoke tests. |
-| 2026-06-03 | Completed task 13 memory write policies: candidate extraction, sensitive filtering, stability checks, Graphiti write coordination with error degradation, extended MemoryWriteResult schema, graph wiring, and tests. |
-| 2026-06-03 | Completed task 12 reflection evaluator and revise: reflection gate with path/confidence/risk/review triggers, rule-based evaluator, deterministic revise, max rounds fallback, graph integration, and tests. |
-| 2026-06-03 | Completed task 11 parallel multi-agent orchestrator: worker contracts, mock workers, parallel execution with timeout/concurrency limits, partial aggregation, graph integration, and unit/integration tests. |
-| 2026-06-03 | Completed task 10 Plan-and-Execute path: plan schema and validation, deterministic planner, execute/observe loop with LLM and MCP tool steps, graph wiring, and unit/integration tests. |
-| 2026-06-03 | Completed task 09 MCP tools and ReAct loop: MCP client adapter with stdio/URL config, tool discovery/call protocol, observation sanitization, bounded ReAct node, graph integration, and mock tests. |
-| 2026-06-03 | Completed task 08 direct answer path: added direct-answer prompt construction, LLM adapter usage with fake-client injection, fallback handling for LLM errors, and unit/integration coverage. |
-| 2026-06-03 | Completed task 07 intent and complexity router: deterministic direct/tool/plan/multi-agent/fallback routing, observable signals/confidence/reasons, reflection flag, graph conditional paths, and tests. |
-| 2026-06-03 | Completed task 06 context budget and compression: deterministic token estimation, protected current goal/system/recent context, high-value memory filtering, graph compression branch, and unit coverage. |
-| 2026-06-03 | Completed task 05 Graphiti long-term memory client: HTTP/MCP client boundary, mock fallback, optional graphiti smoke test, and OrbStack runbook. |
-| 2026-06-03 | Completed task 04 PostgreSQL checkpoint memory: dependency baseline, async checkpointer factory, graph compile hook, memory fallback, and mock plus optional postgres tests. |
-| 2026-06-03 | Completed task 03 SiliconFlow LLM adapter: centralized OpenAI-compatible client factory, fake LLM client, structured errors, and mock-only tests. |
-| 2026-06-03 | Completed task 02 state schema and graph skeleton: explicit runtime state, safe config loader, multi-node LangGraph skeleton, and contract tests. |
-| 2026-06-03 | Completed task 01 baseline docs/config hygiene: SuperAgent project metadata, environment examples, ignore rules, README config policy, and validation. |
-| 2026-06-03 | Created SuperAgent planning docs and 15-task implementation queue from `docs/prd/super-agent-runtime-architecture.md`. |
+| 2026-06-03 | Planned incremental queue from `super-agent-incremental.md`: task cards 16–24, progress section; Phase 1 Notes 补档位诚实标注。 |
+| 2026-06-03 | Completed task 15 final docs and architecture maps. |
+| 2026-06-03 | Created SuperAgent planning docs and 15-task queue from runtime architecture PRD. |

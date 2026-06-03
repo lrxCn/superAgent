@@ -9,7 +9,9 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | 15/15 tasks complete — see [docs/progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [0/9 — progress.md](docs/progress.md) |
+| Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
+| Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
 | Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) (with implementation status) |
 
@@ -194,4 +196,4 @@ Optional smoke (real services): PostgreSQL checkpoint, Graphiti, MCP filesystem 
 
 ## Maintenance
 
-The 15-task implementation queue is complete. For follow-on work, extend the runtime in focused PRs and update `docs/maps/` plus this README when graph topology or state contracts change.
+Phase 1 skeleton is complete. **Incremental queue (16–24)** targets local-usable runtime — see [docs/progress.md](docs/progress.md) and [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md). Execute one prompt per agent window; Agent 验收通过后再标 ✅.
