@@ -24,6 +24,7 @@ from agent.nodes.planner import (
     create_step_observe_node,
 )
 from agent.nodes.react import create_react_node
+from agent.observability import NodeTracker, langsmith_tracing_enabled, safe_summary
 from agent.reflection import (
     choose_evaluator_path,
     choose_reflection_path,
@@ -43,31 +44,49 @@ def _runtime_config(state: AgentState) -> RuntimeConfig:
 
 async def intake(state: AgentState) -> AgentState:
     """Normalize caller input into the shared runtime state."""
-    return {
-        "runtime_config": _runtime_config(state),
-        "tool_calls": state.get("tool_calls", []),
-        "observations": state.get("observations", []),
-        "agent_results": state.get("agent_results", []),
-        "mcp_sessions": state.get("mcp_sessions", []),
-        "fallback_reason": state.get("fallback_reason"),
-    }
+    tracker = NodeTracker(state, "intake", path="control")
+    tracing = langsmith_tracing_enabled()
+    return tracker.finish(
+        {
+            "runtime_config": _runtime_config(state),
+            "tool_calls": state.get("tool_calls", []),
+            "observations": state.get("observations", []),
+            "agent_results": state.get("agent_results", []),
+            "mcp_sessions": state.get("mcp_sessions", []),
+            "fallback_reason": state.get("fallback_reason"),
+            "runtime_events": state.get("runtime_events", []),
+        },
+        summary=f"initialized runtime fields; langsmith_tracing={tracing}",
+    )
 
 
 async def load_memory(state: AgentState) -> AgentState:
     """Load placeholder memory context."""
+    tracker = NodeTracker(state, "load_memory", path="control")
     memory_context: MemoryContext = {
         "short_term": [],
         "long_term": [],
         "entities": [],
         "errors": [],
     }
-    return {"memory_context": state.get("memory_context") or memory_context}
+    loaded = state.get("memory_context") or memory_context
+    return tracker.finish(
+        {"memory_context": loaded},
+        summary=f"memory_loaded short={len(loaded['short_term'])} long={len(loaded['long_term'])}",
+    )
 
 
 async def context_budget(state: AgentState) -> AgentState:
     """Estimate context budget before routing."""
+    tracker = NodeTracker(state, "context_budget", path="control")
     budget = check_context_budget(state, limit=load_config().llm_max_tokens)
-    return {"context_budget": budget}
+    return tracker.finish(
+        {"context_budget": budget},
+        summary=(
+            f"estimated={budget['estimated']} limit={budget['limit']} "
+            f"compressed={budget['compressed']}"
+        ),
+    )
 
 
 def choose_context_budget_path(state: AgentState) -> Literal["compress_memory", "ok"]:
@@ -80,15 +99,31 @@ def choose_context_budget_path(state: AgentState) -> Literal["compress_memory", 
 
 async def compress_memory(state: AgentState) -> AgentState:
     """Compress context deterministically without calling an LLM."""
+    tracker = NodeTracker(state, "compress_memory", path="control")
     budget = state.get("context_budget")
     limit = budget["limit"] if budget else load_config().llm_max_tokens
-    return compress_state_context(state, limit=limit)
+    compressed = compress_state_context(state, limit=limit)
+    updated_budget = compressed.get("context_budget", budget)
+    summary = "context compressed"
+    if updated_budget:
+        summary = (
+            f"dropped_messages={updated_budget.get('dropped_messages', 0)} "
+            f"dropped_memories={updated_budget.get('dropped_memories', 0)}"
+        )
+    return tracker.finish(compressed, summary=summary)
 
 
 async def intent_router(state: AgentState) -> AgentState:
     """Choose an execution path from structured intent signals."""
-    decision = route_intent(state)
-    return {"intent_decision": state.get("intent_decision") or decision}
+    tracker = NodeTracker(state, "intent_router", event="route", path="control")
+    decision = state.get("intent_decision") or route_intent(state)
+    return tracker.finish(
+        {"intent_decision": decision},
+        summary=(
+            f"path={decision['path']} confidence={decision['confidence']:.2f} "
+            f"reason={safe_summary(decision['reason'], max_chars=120)}"
+        ),
+    )
 
 
 def choose_execution_path(state: AgentState) -> Literal[
@@ -107,6 +142,7 @@ def choose_execution_path(state: AgentState) -> Literal[
 
 async def fallback(state: AgentState) -> AgentState:
     """Fallback placeholder for later routing and safety tasks."""
+    tracker = NodeTracker(state, "fallback", event="fallback")
     decision = state.get("intent_decision")
     evaluation = state.get("evaluation") or {
         "enabled": False,
@@ -140,15 +176,24 @@ async def fallback(state: AgentState) -> AgentState:
     }
     if evaluation.get("status") == "fail":
         updates["reflection_exhausted"] = True
-    return updates
+    return tracker.finish(
+        updates,
+        summary=f"fallback_reason={safe_summary(reason, max_chars=160)}",
+        status="completed",
+    )
 
 
 async def final_answer(state: AgentState) -> AgentState:
     """Ensure the graph always returns a final answer field."""
-    return {
-        "final_answer": state.get("final_answer")
+    tracker = NodeTracker(state, "final_answer", path="control")
+    answer = (
+        state.get("final_answer")
         or "SuperAgent runtime skeleton completed without a generated answer."
-    }
+    )
+    return tracker.finish(
+        {"final_answer": answer},
+        summary=f"final_answer_chars={len(answer)}",
+    )
 
 
 def create_graph_builder(

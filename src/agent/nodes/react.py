@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Literal, cast
 
 from agent.config import AppConfig, load_config
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
+from agent.observability import NodeTracker, observability_updates, safe_tool_summary
 from agent.state import AgentState, MCPSession, Message, Observation, ToolCall
 from agent.tools.mcp import (
     MCPClient,
@@ -52,6 +53,8 @@ class ReActNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Connect to MCP, run the ReAct loop, and write tool history."""
+        tracker = NodeTracker(state, "react_agent")
+        scratch = cast(AgentState, dict(state))
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
         max_steps = runtime_config["react_max_steps"]
         tool_timeout = float(runtime_config["tool_timeout_seconds"])
@@ -107,13 +110,19 @@ class ReActNode:
         except Exception as exc:
             await client.close()
             reason = f"ReAct LLM initialization failed: {exc}"
-            return {
-                "mcp_sessions": [session],
-                "tool_calls": tool_calls,
-                "observations": observations,
-                "fallback_reason": reason,
-                "final_answer": state.get("final_answer") or f"Fallback: {reason}",
-            }
+            tracker.state = scratch
+            return tracker.finish(
+                {
+                    "mcp_sessions": [session],
+                    "tool_calls": tool_calls,
+                    "observations": observations,
+                    "fallback_reason": reason,
+                    "final_answer": state.get("final_answer") or f"Fallback: {reason}",
+                },
+                summary="react_llm_init_failed",
+                status="failed",
+                error_type=type(exc).__name__,
+            )
 
         for step in range(max_steps):
             try:
@@ -223,14 +232,30 @@ class ReActNode:
                 )
                 continue
 
+            tool_status: Literal["completed", "failed"] = (
+                "completed" if observation.success else "failed"
+            )
             tool_calls.append(
                 tool_call_to_state_entry(
                     request,
-                    status="completed" if observation.success else "failed",
+                    status=tool_status,
                     error=observation.error,
                 )
             )
             observations.append(observation_to_state_entry(observation))
+            tool_observation = observability_updates(
+                scratch,
+                event="tool_call",
+                node="react_agent",
+                status="completed" if observation.success else "failed",
+                summary=safe_tool_summary(
+                    decision.tool_name,
+                    decision.arguments,
+                    status=tool_status,
+                    error=observation.error,
+                ),
+            )
+            scratch.update(tool_observation)
         else:
             fallback_reason = f"ReAct loop exceeded max steps ({max_steps})."
             observations.append(
@@ -246,15 +271,24 @@ class ReActNode:
         if final_answer is None and fallback_reason:
             final_answer = state.get("final_answer") or f"Fallback: {fallback_reason}"
 
-        return {
-            "mcp_sessions": [session],
-            "tool_calls": tool_calls,
-            "observations": observations,
-            "fallback_reason": fallback_reason,
-            "final_answer": final_answer
-            or state.get("final_answer")
-            or "ReAct loop completed without a final answer.",
-        }
+        tracker.state = scratch
+        return tracker.finish(
+            {
+                "mcp_sessions": [session],
+                "tool_calls": tool_calls,
+                "observations": observations,
+                "fallback_reason": fallback_reason,
+                "final_answer": final_answer
+                or state.get("final_answer")
+                or "ReAct loop completed without a final answer.",
+            },
+            summary=(
+                f"tool_calls={len(tool_calls)} observations={len(observations)} "
+                f"session={session['name']}"
+            ),
+            status="failed" if fallback_reason else "completed",
+            error_type="ReActError" if fallback_reason else None,
+        )
 
     def _create_client(self) -> MCPClient | None:
         if self.mcp_factory is not None:
@@ -274,19 +308,25 @@ class ReActNode:
         observations: list[Observation],
         mcp_sessions: list[MCPSession] | None = None,
     ) -> AgentState:
+        tracker = NodeTracker(state, "react_agent")
         session: MCPSession = {
             "name": session_name,
             "status": "failed",
             "tools": [],
             "error": reason,
         }
-        return {
-            "mcp_sessions": mcp_sessions or [session],
-            "tool_calls": tool_calls,
-            "observations": observations,
-            "fallback_reason": reason,
-            "final_answer": state.get("final_answer") or f"Fallback: {reason}",
-        }
+        return tracker.finish(
+            {
+                "mcp_sessions": mcp_sessions or [session],
+                "tool_calls": tool_calls,
+                "observations": observations,
+                "fallback_reason": reason,
+                "final_answer": state.get("final_answer") or f"Fallback: {reason}",
+            },
+            summary=f"mcp_failure session={session_name}",
+            status="failed",
+            error_type="MCPConnectionError",
+        )
 
 
 def create_react_node(

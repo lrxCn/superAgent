@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal
 
 from agent.config import load_config
+from agent.observability import NodeTracker, safe_summary
 from agent.router import (
     HIGH_RISK_KEYWORDS,
     LOW_CONFIDENCE_THRESHOLD,
@@ -271,11 +272,17 @@ class ReflectionGateNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Write gate decision into graph state."""
+        tracker = NodeTracker(state, "reflection_gate", event="reflection")
         gate = compute_reflection_gate(state)
         reflection_round = state.get("reflection_round", 0)
-        return {
-            "evaluation": build_gate_evaluation(gate, reflection_round=reflection_round),
-        }
+        return tracker.finish(
+            {"evaluation": build_gate_evaluation(gate, reflection_round=reflection_round)},
+            summary=(
+                f"reflection_enabled={gate.enabled} "
+                f"reasons={safe_summary(gate.reasons or gate.skip_reason or '', max_chars=120)}"
+            ),
+            status="skipped" if not gate.enabled else "completed",
+        )
 
 
 @dataclass
@@ -286,8 +293,13 @@ class EvaluatorNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Evaluate the current answer and record PASS/FAIL."""
+        tracker = NodeTracker(state, "evaluator", event="reflection")
         result = (self.evaluator or evaluate_output)(state)
-        return {"evaluation": result}
+        return tracker.finish(
+            {"evaluation": result},
+            summary=f"evaluation_status={result.get('status', 'not_required')}",
+            status="failed" if result.get("status") == "fail" else "completed",
+        )
 
 
 @dataclass
@@ -298,12 +310,16 @@ class ReviseNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Revise the answer after a failed evaluation."""
+        tracker = NodeTracker(state, "revise", event="reflection")
         reflection_round = state.get("reflection_round", 0) + 1
         revised_answer = (self.reviser or revise_output)(state)
-        return {
-            "final_answer": revised_answer,
-            "reflection_round": reflection_round,
-        }
+        return tracker.finish(
+            {
+                "final_answer": revised_answer,
+                "reflection_round": reflection_round,
+            },
+            summary=f"revision_round={reflection_round} answer_chars={len(revised_answer)}",
+        )
 
 
 def create_reflection_gate_node() -> ReflectionGateNode:

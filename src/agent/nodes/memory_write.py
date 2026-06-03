@@ -13,6 +13,7 @@ from agent.memory.graphiti import (
     create_graphiti_client,
 )
 from agent.memory.policy import MemoryWriteCandidate, evaluate_write_policies
+from agent.observability import NodeTracker, safe_summary
 from agent.state import AgentState, Evaluation, MemoryWriteResult
 
 
@@ -31,8 +32,18 @@ class MemoryWriteNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Execute memory write policies and record structured results."""
+        tracker = NodeTracker(state, "memory_write", event="memory_write")
         result = await execute_memory_write(state, client=self.client_factory())
-        return {"memory_write_result": result}
+        status = result["status"]
+        return tracker.finish(
+            {"memory_write_result": result},
+            summary=(
+                f"memory_write status={status} target={result['target']} "
+                f"reason={safe_summary(result.get('reason') or '', max_chars=120)}"
+            ),
+            status="completed" if status in {"stored", "skipped"} else "failed",
+            error_type="MemoryWriteError" if status == "error" else None,
+        )
 
 
 async def execute_memory_write(

@@ -156,6 +156,40 @@ class MemoryWriteResult(TypedDict):
     stored_count: NotRequired[int]
 
 
+RuntimeEventStatus = Literal["started", "completed", "failed", "skipped"]
+RuntimeEventName = Literal[
+    "node",
+    "route",
+    "tool_call",
+    "fallback",
+    "memory_write",
+    "reflection",
+]
+ObservedPath = RoutePath | Literal["control", "unknown"]
+
+
+class RuntimeEvent(TypedDict):
+    """Structured runtime event for observability."""
+
+    event: RuntimeEventName
+    path: ObservedPath
+    node: str
+    status: RuntimeEventStatus
+    duration_ms: int
+    summary: str
+    error_type: NotRequired[str | None]
+
+
+class PathMetrics(TypedDict):
+    """Aggregated metrics for the active execution path."""
+
+    path: ObservedPath
+    event_count: int
+    nodes: list[str]
+    total_duration_ms: int
+    terminal_status: NotRequired[RuntimeEventStatus | None]
+
+
 class AgentState(TypedDict, total=False):
     """Shared graph state.
 
@@ -185,6 +219,8 @@ class AgentState(TypedDict, total=False):
     step_status_pending: NotRequired[PlanStepStatus | None]
     run_id: NotRequired[str]
     thread_id: NotRequired[str]
+    runtime_events: NotRequired[list[RuntimeEvent]]
+    path_metrics: NotRequired[PathMetrics]
 
 
 def create_initial_state(message: str) -> AgentState:

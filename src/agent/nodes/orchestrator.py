@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from agent.config import load_config
+from agent.observability import NodeTracker
 from agent.state import AgentResult, AgentState, Observation, RuntimeConfig
 from agent.workers.mock import create_mock_worker_registry
 from agent.workers.protocol import (
@@ -245,6 +246,7 @@ class MultiAgentOrchestratorNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Run selected workers in parallel and write aggregated state."""
+        tracker = NodeTracker(state, "multi_agent_orchestrator")
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
         roles = select_worker_roles(state)
         outputs = await run_workers_parallel(
@@ -264,14 +266,20 @@ class MultiAgentOrchestratorNode:
         worker_results = [worker_output_to_agent_result(item) for item in outputs]
         existing = list(state.get("agent_results", []))
 
-        return {
-            "agent_results": [*existing, orchestrator_result, *worker_results],
-            "observations": [
-                *state.get("observations", []),
-                *outputs_to_observations(outputs),
-            ],
-            "final_answer": state.get("final_answer") or summary,
-        }
+        return tracker.finish(
+            {
+                "agent_results": [*existing, orchestrator_result, *worker_results],
+                "observations": [
+                    *state.get("observations", []),
+                    *outputs_to_observations(outputs),
+                ],
+                "final_answer": state.get("final_answer") or summary,
+            },
+            summary=(
+                f"workers={len(outputs)} aggregate={aggregate_status} "
+                f"confidence={confidence:.2f}"
+            ),
+        )
 
 
 def create_multi_agent_orchestrator_node(

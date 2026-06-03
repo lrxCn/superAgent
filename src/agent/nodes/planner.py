@@ -9,6 +9,7 @@ from typing import Callable
 
 from agent.config import AppConfig, load_config
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
+from agent.observability import NodeTracker, safe_summary
 from agent.planning import (
     find_next_runnable_step,
     plan_validation_messages,
@@ -68,13 +69,14 @@ class PlanGenerateNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Generate a structured plan from the current user goal."""
+        tracker = NodeTracker(state, "plan_generate")
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
         limit = self.max_steps or runtime_config["plan_max_steps"]
         plan = generate_deterministic_plan(state, max_steps=limit)
-        return {
-            "plan": plan,
-            "current_step": None,
-        }
+        return tracker.finish(
+            {"plan": plan, "current_step": None},
+            summary=f"plan_steps={len(plan['steps'])} status={plan['status']}",
+        )
 
 
 @dataclass
@@ -83,24 +85,33 @@ class PlanValidateNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Validate the current plan or route to fallback on failure."""
+        tracker = NodeTracker(state, "plan_validate")
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
         plan = state.get("plan") or {"steps": [], "status": "pending"}
         issues = validate_plan(plan, max_steps=runtime_config["plan_max_steps"])
         if issues:
             messages = plan_validation_messages(issues)
             reason = "Plan validation failed: " + "; ".join(messages)
-            return {
-                "plan": {
-                    **plan,
-                    "status": "failed",
-                    "validation_errors": messages,
+            return tracker.finish(
+                {
+                    "plan": {
+                        **plan,
+                        "status": "failed",
+                        "validation_errors": messages,
+                    },
+                    "fallback_reason": reason,
+                    "final_answer": state.get("final_answer") or f"Fallback: {reason}",
                 },
-                "fallback_reason": reason,
-                "final_answer": state.get("final_answer") or f"Fallback: {reason}",
-            }
+                summary=safe_summary(reason, max_chars=160),
+                status="failed",
+                error_type="PlanValidationError",
+            )
 
         validated: Plan = {**plan, "status": "running", "validation_errors": []}
-        return {"plan": validated}
+        return tracker.finish(
+            {"plan": validated},
+            summary=f"plan_validated steps={len(validated['steps'])}",
+        )
 
 
 @dataclass
@@ -115,19 +126,23 @@ class ExecutePlanNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Run the next runnable plan step and stage its observation."""
+        tracker = NodeTracker(state, "execute_plan")
         plan = state.get("plan") or {"steps": [], "status": "failed"}
         if plan.get("status") == "failed":
-            return {}
+            return tracker.finish({}, summary="plan_already_failed", status="skipped")
 
         step = find_next_runnable_step(plan)
         if step is None:
             refreshed = refresh_plan_status(plan)
-            return {
-                "plan": refreshed,
-                "current_step": None,
-                "final_answer": state.get("final_answer")
-                or summarize_plan_execution(refreshed),
-            }
+            final_answer = state.get("final_answer") or summarize_plan_execution(refreshed)
+            return tracker.finish(
+                {
+                    "plan": refreshed,
+                    "current_step": None,
+                    "final_answer": final_answer,
+                },
+                summary=f"plan_status={refreshed['status']}",
+            )
 
         running_plan = update_step_status(plan, step["id"], status="running")
         tool_calls = list(state.get("tool_calls", []))
@@ -188,7 +203,12 @@ class ExecutePlanNode:
             updates["step_status_pending"] = (
                 "failed" if observation.get("error") else "completed"
             )
-        return updates
+        return tracker.finish(
+            updates,
+            summary=f"step={step['id']} type={step['type']}",
+            status="failed" if observation.get("error") else "completed",
+            error_type="PlanStepError" if observation.get("error") else None,
+        )
 
     async def _execute_llm_step(
         self,
@@ -332,6 +352,7 @@ class StepObserveNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Record the latest step observation and refresh aggregate plan status."""
+        tracker = NodeTracker(state, "step_observe")
         plan = state.get("plan") or {"steps": [], "status": "failed"}
         current_step = state.get("current_step")
         observation = state.get("step_observation_pending")
@@ -356,12 +377,17 @@ class StepObserveNode:
         if plan["status"] in {"completed", "failed"} and not final_answer:
             final_answer = summarize_plan_execution(plan)
 
-        return {
+        updates: AgentState = {
             "plan": plan,
             "observations": observations,
             "current_step": current_step,
-            **({"final_answer": final_answer} if final_answer is not None else {}),
         }
+        if final_answer is not None:
+            updates["final_answer"] = final_answer
+        return tracker.finish(
+            updates,
+            summary=f"plan_status={plan['status']} observations={len(observations)}",
+        )
 
 
 def create_plan_generate_node(max_steps: int | None = None) -> PlanGenerateNode:

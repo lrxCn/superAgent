@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
+from agent.observability import NodeTracker, safe_summary
 from agent.state import AgentState, Evaluation, MemoryContext, Message, Plan
 
 SYSTEM_PROMPT = (
@@ -23,6 +24,7 @@ class DirectAnswerNode:
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Generate a direct final answer or record a fallback reason."""
+        tracker = NodeTracker(state, "direct_answer")
         evaluation: Evaluation = {
             "enabled": bool(
                 state.get("intent_decision", {}).get("requires_reflection", False)
@@ -42,20 +44,29 @@ class DirectAnswerNode:
                 reason = str(exc)
             else:
                 reason = f"Direct answer LLM call failed: {exc}"
-            return {
-                "fallback_reason": reason,
+            return tracker.finish(
+                {
+                    "fallback_reason": reason,
+                    "evaluation": state.get("evaluation") or evaluation,
+                    "plan": state.get("plan") or plan,
+                    "current_step": state.get("current_step"),
+                    "final_answer": state.get("final_answer") or f"Fallback: {reason}",
+                },
+                summary=f"direct_answer_failed reason={safe_summary(reason, max_chars=120)}",
+                status="failed",
+                error_type=type(exc).__name__,
+            )
+
+        answer = state.get("final_answer") or result.content.strip()
+        return tracker.finish(
+            {
+                "final_answer": answer,
                 "evaluation": state.get("evaluation") or evaluation,
                 "plan": state.get("plan") or plan,
                 "current_step": state.get("current_step"),
-                "final_answer": state.get("final_answer") or f"Fallback: {reason}",
-            }
-
-        return {
-            "final_answer": state.get("final_answer") or result.content.strip(),
-            "evaluation": state.get("evaluation") or evaluation,
-            "plan": state.get("plan") or plan,
-            "current_step": state.get("current_step"),
-        }
+            },
+            summary=f"direct_answer_chars={len(answer)}",
+        )
 
 
 def build_direct_answer_messages(state: AgentState) -> list[Message]:
