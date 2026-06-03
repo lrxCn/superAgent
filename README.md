@@ -6,9 +6,9 @@ SuperAgent is a LangGraph-based agent runtime for local `langgraph dev`. The rep
 
 | Item | Status |
 |------|--------|
-| Runtime code | Runnable state/config graph skeleton with SiliconFlow LLM adapter and optional PostgreSQL checkpointing |
+| Runtime code | Runnable state/config graph skeleton with SiliconFlow LLM adapter, optional PostgreSQL checkpointing, and Graphiti memory client |
 | Target runtime | Planned multi-path agent runtime |
-| Core tasks | 04/15 completed |
+| Core tasks | 05/15 completed |
 | Progress | [docs/progress.md](docs/progress.md) |
 | Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) |
 
@@ -59,7 +59,7 @@ The implementation should keep LangGraph as the orchestration boundary. Nodes sh
 - Short-term memory: LangGraph checkpoint + PostgreSQL.
 - Checkpointer package: `langgraph-checkpoint-postgres`.
 - First implementation should use `AsyncPostgresSaver.from_conn_string(DATABASE_URL)` and `setup()` for table initialization.
-- Long-term memory: local Graphiti deployment, defaulting to the Graphiti MCP Server Docker Compose FalkorDB backend on OrbStack/Docker.
+- Long-term memory: local Graphiti deployment, defaulting to the Graphiti MCP Server Docker Compose FalkorDB backend on OrbStack/Docker. See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
 
 ### Tools
 
