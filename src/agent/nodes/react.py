@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Literal, cast
 
 from agent.config import AppConfig, load_config
+from agent.guardrails import check_tool_guardrail, security_event_updates
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
 from agent.observability import NodeTracker, observability_updates, safe_tool_summary
 from agent.state import AgentState, MCPSession, Message, Observation, ToolCall
@@ -159,13 +160,48 @@ class ReActNode:
                 fallback_reason = "ReAct model returned an unsupported action."
                 break
 
+            request = ToolCallRequest(
+                tool_name=decision.tool_name,
+                arguments=decision.arguments,
+            )
+            guardrail_decision = check_tool_guardrail(
+                scratch,
+                tool_name=decision.tool_name,
+                current_tool_call_count=len(tool_calls),
+            )
+            if not guardrail_decision.allowed:
+                fallback_reason = guardrail_decision.reason
+                final_answer = state.get("final_answer") or f"Fallback: {fallback_reason}"
+                tool_calls.append(
+                    tool_call_to_state_entry(
+                        request,
+                        status="failed",
+                        error=fallback_reason,
+                    )
+                )
+                observations.append(
+                    observation_to_state_entry(
+                        ToolObservation(
+                            tool_name=decision.tool_name,
+                            content=fallback_reason,
+                            success=False,
+                            error=fallback_reason,
+                        ),
+                        source="guardrail",
+                    )
+                )
+                scratch.update(
+                    security_event_updates(
+                        {**scratch, "tool_calls": tool_calls, "observations": observations},
+                        node="react_agent",
+                        decision=guardrail_decision,
+                    )
+                )
+                break
+
             tool_spec = _find_tool(tools, decision.tool_name)
             if tool_spec is None:
                 error = f"Unknown tool '{decision.tool_name}'."
-                request = ToolCallRequest(
-                    tool_name=decision.tool_name,
-                    arguments=decision.arguments,
-                )
                 tool_calls.append(
                     tool_call_to_state_entry(request, status="failed", error=error)
                 )
@@ -180,10 +216,6 @@ class ReActNode:
                 continue
 
             validation_error = validate_tool_arguments(tool_spec, decision.arguments)
-            request = ToolCallRequest(
-                tool_name=decision.tool_name,
-                arguments=decision.arguments,
-            )
             if validation_error:
                 tool_calls.append(
                     tool_call_to_state_entry(

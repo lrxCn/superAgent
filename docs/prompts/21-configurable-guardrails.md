@@ -11,7 +11,7 @@
 1. 先读 `AGENTS.md`、`README.md`、`docs/progress.md`、`docs/prd/super-agent-incremental.md` 和本任务卡。
 2. 核对任务 **20** 已完成。
 3. 只实现本任务范围；跑 Agent 验收。
-4. 用户要求 commit 时再提交。
+4. 执行完自动 git commit，message 为 `21`；不要自动 push，除非用户明确要求。
 
 ## 依赖
 

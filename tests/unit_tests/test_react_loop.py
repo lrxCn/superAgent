@@ -15,6 +15,21 @@ from agent.tools.mcp import (
 pytestmark = pytest.mark.anyio
 
 
+def _runtime_config(**overrides: object) -> dict[str, object]:
+    config = {
+        "react_max_steps": 8,
+        "plan_max_steps": 12,
+        "worker_max_concurrency": 4,
+        "worker_timeout_seconds": 120,
+        "tool_timeout_seconds": 30,
+        "reflection_max_rounds": 1,
+        "memory_enabled": True,
+        "reflection_enabled": True,
+    }
+    config.update(overrides)
+    return config
+
+
 def test_parse_react_decision_accepts_finish_and_call_tool() -> None:
     finish = parse_react_decision('{"action":"finish","answer":"done"}')
     assert finish is not None
@@ -165,6 +180,79 @@ async def test_react_node_records_validation_failure() -> None:
     assert result["tool_calls"][0]["status"] == "failed"
     assert "Missing required arguments" in str(result["tool_calls"][0]["error"])
     assert result["observations"][0]["error"]
+
+
+async def test_react_node_guardrail_blocks_disallowed_tool_before_call() -> None:
+    llm = FakeLLMClient(
+        responses=[
+            '{"action":"call_tool","tool_name":"delete_file","arguments":{"path":"README.md"}}',
+        ]
+    )
+    mcp = FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="delete_file",
+                description="Delete a file",
+                input_schema={
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            )
+        ]
+    )
+    node = create_react_node(llm_client=llm, mcp_client=mcp)
+
+    result = await node(
+        {
+            "messages": [{"role": "user", "content": "Delete README.md"}],
+            "runtime_config": _runtime_config(
+                guardrail_tool_allowlist=["read_file"],
+            ),
+        }
+    )
+
+    assert result["tool_calls"][0]["status"] == "failed"
+    assert result["tool_calls"][0]["error"].startswith("Guardrail blocked tool")
+    assert result["observations"][0]["source"] == "guardrail"
+    assert not mcp.calls
+    assert any(event["event"] == "security" for event in result["runtime_events"])
+
+
+async def test_react_node_guardrail_enforces_max_tool_calls_per_run() -> None:
+    llm = FakeLLMClient(
+        responses=[
+            '{"action":"call_tool","tool_name":"read_file","arguments":{"path":"a.md"}}',
+            '{"action":"call_tool","tool_name":"read_file","arguments":{"path":"b.md"}}',
+        ]
+    )
+    mcp = FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="read_file",
+                description="Read a file",
+                input_schema={
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            )
+        ]
+    )
+    node = create_react_node(llm_client=llm, mcp_client=mcp)
+
+    result = await node(
+        {
+            "messages": [{"role": "user", "content": "Read two files"}],
+            "runtime_config": _runtime_config(max_tool_calls_per_run=1),
+        }
+    )
+
+    assert len(mcp.calls) == 1
+    assert len(result["tool_calls"]) == 2
+    assert result["tool_calls"][1]["status"] == "failed"
+    assert "max_tool_calls_per_run=1" in result["tool_calls"][1]["error"]
+    assert any(event["event"] == "security" for event in result["runtime_events"])
 
 
 async def test_react_node_stops_at_max_steps() -> None:

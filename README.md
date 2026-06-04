@@ -92,6 +92,7 @@ Full edge labels and path notes: [docs/maps/runtime-graph.md](docs/maps/runtime-
 | Multi-Agent | Parallel workers (researcher, coder, reviewer, memory manager) |
 | Reflection | Quality gate for complex, tool, plan, multi-agent, high-risk, or low-confidence routes |
 | Fallback | Clarification, partial result, or safe downgrade when execution cannot continue |
+| Guardrails | Configurable topic block, MCP tool allowlist, and per-run tool call cap with security events |
 
 Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](docs/maps/state-contract.md).
 
@@ -171,6 +172,10 @@ WORKER_MAX_CONCURRENCY=4
 WORKER_TIMEOUT_SECONDS=120
 TOOL_TIMEOUT_SECONDS=30
 REFLECTION_MAX_ROUNDS=1
+
+GUARDRAIL_TOOL_ALLOWLIST=
+GUARDRAIL_BLOCKED_TOPICS=
+MAX_TOOL_CALLS_PER_RUN=0
 
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/super_agent?sslmode=disable
 CHECKPOINT_SETUP=true

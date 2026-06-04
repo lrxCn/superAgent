@@ -50,6 +50,21 @@ def test_runtime_event_fields_are_structured() -> None:
     assert event["summary"] == "answer ready"
 
 
+def test_security_runtime_event_is_structured() -> None:
+    event = build_runtime_event(
+        event="security",
+        node="react_agent",
+        status="failed",
+        summary="Guardrail blocked tool",
+        path="react_agent",
+        error_type="GuardrailViolation",
+    )
+
+    assert event["event"] == "security"
+    assert event["status"] == "failed"
+    assert event["error_type"] == "GuardrailViolation"
+
+
 def test_path_metrics_aggregate_active_path() -> None:
     state: AgentState = {
         "intent_decision": {

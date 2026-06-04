@@ -59,6 +59,27 @@ def test_load_config_parses_mcp_servers_json() -> None:
     assert config.mcp_servers[1]["transport"] == "streamable_http"
 
 
+def test_load_config_parses_guardrail_controls() -> None:
+    config = load_config(
+        {
+            "GUARDRAIL_TOOL_ALLOWLIST": "filesystem.read_file,catalog.*",
+            "GUARDRAIL_BLOCKED_TOPICS": "credential, malware",
+            "MAX_TOOL_CALLS_PER_RUN": "3",
+        }
+    )
+
+    assert config.guardrail_tool_allowlist == ("filesystem.read_file", "catalog.*")
+    assert config.guardrail_blocked_topics == ("credential", "malware")
+    assert config.max_tool_calls_per_run == 3
+    runtime_config = config.to_runtime_config()
+    assert runtime_config["guardrail_tool_allowlist"] == [
+        "filesystem.read_file",
+        "catalog.*",
+    ]
+    assert runtime_config["guardrail_blocked_topics"] == ["credential", "malware"]
+    assert runtime_config["max_tool_calls_per_run"] == 3
+
+
 def test_load_config_keeps_legacy_mcp_example_as_default_server() -> None:
     config = load_config(
         {

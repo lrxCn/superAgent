@@ -35,6 +35,13 @@ def _env_int(env: Mapping[str, str], name: str, default: int) -> int:
         return default
 
 
+def _env_list(env: Mapping[str, str], name: str) -> list[str]:
+    value = env.get(name)
+    if value is None or value == "":
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 @dataclass(frozen=True)
 class AppConfig:
     """Environment-derived configuration with secrets redacted from repr."""
@@ -60,6 +67,9 @@ class AppConfig:
     mcp_example_server_args: str
     mcp_servers: tuple[dict[str, object], ...]
     mcp_tool_timeout_seconds: int
+    guardrail_tool_allowlist: tuple[str, ...]
+    guardrail_blocked_topics: tuple[str, ...]
+    max_tool_calls_per_run: int
     graphiti_backend: str
     graphiti_mcp_url: str
     falkordb_url: str
@@ -76,6 +86,9 @@ class AppConfig:
             "reflection_max_rounds": self.reflection_max_rounds,
             "memory_enabled": True,
             "reflection_enabled": True,
+            "guardrail_tool_allowlist": list(self.guardrail_tool_allowlist),
+            "guardrail_blocked_topics": list(self.guardrail_blocked_topics),
+            "max_tool_calls_per_run": self.max_tool_calls_per_run,
         }
 
 
@@ -111,6 +124,9 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         ),
         mcp_servers=_env_mcp_servers(env),
         mcp_tool_timeout_seconds=_env_int(env, "MCP_TOOL_TIMEOUT_SECONDS", 30),
+        guardrail_tool_allowlist=tuple(_env_list(env, "GUARDRAIL_TOOL_ALLOWLIST")),
+        guardrail_blocked_topics=tuple(_env_list(env, "GUARDRAIL_BLOCKED_TOPICS")),
+        max_tool_calls_per_run=_env_int(env, "MAX_TOOL_CALLS_PER_RUN", 0),
         graphiti_backend=env.get("GRAPHITI_BACKEND", "falkordb"),
         graphiti_mcp_url=env.get("GRAPHITI_MCP_URL", "http://localhost:8000"),
         falkordb_url=env.get("FALKORDB_URL", "redis://localhost:6379"),

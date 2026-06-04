@@ -232,6 +232,60 @@ async def test_execute_plan_routes_server_qualified_tool_step() -> None:
     assert not filesystem.calls
 
 
+async def test_execute_plan_guardrail_blocks_disallowed_tool_step() -> None:
+    mcp = FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="write_file",
+                description="Write a file",
+                input_schema={
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            )
+        ]
+    )
+    plan: Plan = {
+        "steps": [
+            {
+                "id": "write",
+                "title": "Write file",
+                "type": "tool",
+                "dependencies": [],
+                "acceptance_criteria": ["Tool output captured."],
+                "status": "pending",
+                "tool_name": "write_file",
+                "tool_arguments": {"path": "README.md"},
+            }
+        ],
+        "status": "running",
+    }
+    execute = create_execute_plan_node(mcp_client=mcp)
+    observe = create_step_observe_node()
+    state = {
+        "messages": [{"role": "user", "content": "Write a file."}],
+        "runtime_config": {
+            **_runtime_config(),
+            "guardrail_tool_allowlist": ["read_file"],
+        },
+        "plan": plan,
+        "observations": [],
+        "tool_calls": [],
+        "mcp_sessions": [],
+    }
+
+    state = {**state, **await execute(state)}
+    state = {**state, **await observe(state)}
+
+    assert state["plan"]["status"] == "failed"
+    assert state["tool_calls"][0]["status"] == "failed"
+    assert state["observations"][0]["source"] == "guardrail"
+    assert "Guardrail blocked tool" in state["fallback_reason"]
+    assert not mcp.calls
+    assert any(event["event"] == "security" for event in state["runtime_events"])
+
+
 async def test_agent_step_runs_worker_and_completes() -> None:
     plan: Plan = {
         "steps": [

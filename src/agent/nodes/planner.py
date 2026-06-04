@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from typing import Callable, cast
 
 from agent.config import AppConfig, load_config
+from agent.guardrails import (
+    GuardrailDecision,
+    check_tool_guardrail,
+    security_event_updates,
+)
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
 from agent.observability import NodeTracker, safe_summary
 from agent.planning import (
@@ -163,6 +168,7 @@ class ExecutePlanNode:
         running_plan = update_step_status(plan, step["id"], status="running")
         tool_calls = list(state.get("tool_calls", []))
         mcp_sessions = list(state.get("mcp_sessions", []))
+        guardrail_decision: GuardrailDecision | None = None
 
         try:
             if step["type"] == "llm":
@@ -170,7 +176,14 @@ class ExecutePlanNode:
                     state, step
                 )
             elif step["type"] == "tool":
-                result, observation, fallback_reason, tool_calls, mcp_sessions = (
+                (
+                    result,
+                    observation,
+                    fallback_reason,
+                    tool_calls,
+                    mcp_sessions,
+                    guardrail_decision,
+                ) = (
                     await self._execute_tool_step(state, step, tool_calls, mcp_sessions)
                 )
             else:
@@ -204,6 +217,14 @@ class ExecutePlanNode:
         }
         if fallback_reason:
             updates["fallback_reason"] = fallback_reason
+        if guardrail_decision is not None and not guardrail_decision.allowed:
+            updates.update(
+                security_event_updates(
+                    {**state, **updates},
+                    node="execute_plan",
+                    decision=guardrail_decision,
+                )
+            )
         updates["step_result_pending"] = result
         updates["step_status_pending"] = (
             "failed" if observation.get("error") else "completed"
@@ -237,7 +258,14 @@ class ExecutePlanNode:
         step: PlanStep,
         tool_calls: list[ToolCall],
         mcp_sessions: list[MCPSession],
-    ) -> tuple[str, Observation, str | None, list[ToolCall], list[MCPSession]]:
+    ) -> tuple[
+        str,
+        Observation,
+        str | None,
+        list[ToolCall],
+        list[MCPSession],
+        GuardrailDecision | None,
+    ]:
         client = self._create_client()
         if client is None:
             reason = "MCP tools are not configured for plan tool steps."
@@ -246,7 +274,7 @@ class ExecutePlanNode:
                 "content": reason,
                 "error": reason,
             }
-            return reason, observation, reason, tool_calls, mcp_sessions
+            return reason, observation, reason, tool_calls, mcp_sessions, None
 
         try:
             await client.connect()
@@ -266,7 +294,7 @@ class ExecutePlanNode:
                 "error": reason,
             }
             await _safe_close_mcp_client(client)
-            return reason, observation, reason, tool_calls, [*mcp_sessions, session]
+            return reason, observation, reason, tool_calls, [*mcp_sessions, session], None
 
         tool_name = step.get("tool_name") or (tools[0].name if tools else "")
         tool_spec = _find_tool(tools, tool_name)
@@ -274,6 +302,32 @@ class ExecutePlanNode:
         request = ToolCallRequest(tool_name=tool_name, arguments=arguments)
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
         tool_timeout = float(runtime_config["tool_timeout_seconds"])
+        guardrail_decision = check_tool_guardrail(
+            state,
+            tool_name=tool_name,
+            current_tool_call_count=len(tool_calls),
+        )
+        if not guardrail_decision.allowed:
+            error = guardrail_decision.reason
+            tool_calls.append(tool_call_to_state_entry(request, status="failed", error=error))
+            observation = observation_to_state_entry(
+                ToolObservation(
+                    tool_name=tool_name,
+                    content=error,
+                    success=False,
+                    error=error,
+                ),
+                source="guardrail",
+            )
+            await _safe_close_mcp_client(client)
+            return (
+                error,
+                observation,
+                error,
+                tool_calls,
+                mcp_sessions,
+                guardrail_decision,
+            )
 
         if tool_spec is None:
             error = f"Unknown tool '{tool_name}'."
@@ -282,7 +336,7 @@ class ExecutePlanNode:
                 ToolObservation(tool_name=tool_name, content=error, success=False, error=error)
             )
             await _safe_close_mcp_client(client)
-            return error, observation, error, tool_calls, mcp_sessions
+            return error, observation, error, tool_calls, mcp_sessions, None
 
         validation_error = validate_tool_arguments(tool_spec, arguments)
         if validation_error:
@@ -298,7 +352,7 @@ class ExecutePlanNode:
                 )
             )
             await _safe_close_mcp_client(client)
-            return validation_error, observation, validation_error, tool_calls, mcp_sessions
+            return validation_error, observation, validation_error, tool_calls, mcp_sessions, None
 
         try:
             tool_observation = await client.call_tool(
@@ -318,7 +372,7 @@ class ExecutePlanNode:
                 )
             )
             await _safe_close_mcp_client(client)
-            return error, observation, error, tool_calls, mcp_sessions
+            return error, observation, error, tool_calls, mcp_sessions, None
 
         tool_calls.append(
             tool_call_to_state_entry(
@@ -331,7 +385,7 @@ class ExecutePlanNode:
         await _safe_close_mcp_client(client)
         content = tool_observation.content
         fallback = tool_observation.error
-        return content, observation, fallback, tool_calls, mcp_sessions
+        return content, observation, fallback, tool_calls, mcp_sessions, None
 
     async def _execute_agent_step(
         self,

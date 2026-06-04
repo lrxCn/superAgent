@@ -34,6 +34,9 @@ class RuntimeConfig(TypedDict):
     reflection_max_rounds: int
     memory_enabled: bool
     reflection_enabled: bool
+    guardrail_tool_allowlist: NotRequired[list[str]]
+    guardrail_blocked_topics: NotRequired[list[str]]
+    max_tool_calls_per_run: NotRequired[int]
 
 
 class MemoryContext(TypedDict):
@@ -161,6 +164,7 @@ RuntimeEventName = Literal[
     "node",
     "route",
     "tool_call",
+    "security",
     "fallback",
     "memory_write",
     "reflection",

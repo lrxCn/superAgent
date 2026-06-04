@@ -9,6 +9,11 @@ from langgraph.graph import END, StateGraph
 
 from agent.config import load_config
 from agent.context_budget import check_context_budget, compress_state_context
+from agent.guardrails import (
+    check_topic_guardrail,
+    guardrail_intent_decision,
+    security_event_updates,
+)
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.memory.graphiti import LongTermMemoryClient
@@ -102,6 +107,26 @@ async def compress_memory(state: AgentState) -> AgentState:
 async def intent_router(state: AgentState) -> AgentState:
     """Choose an execution path from structured intent signals."""
     tracker = NodeTracker(state, "intent_router", event="route", path="control")
+    topic_decision = check_topic_guardrail(state)
+    if not topic_decision.allowed:
+        decision = guardrail_intent_decision(topic_decision)
+        security_updates = security_event_updates(
+            {**state, "intent_decision": decision},
+            node="intent_router",
+            decision=topic_decision,
+        )
+        return tracker.finish(
+            {
+                **security_updates,
+                "intent_decision": decision,
+                "fallback_reason": topic_decision.reason,
+                "final_answer": state.get("final_answer") or f"Fallback: {topic_decision.reason}",
+            },
+            summary=safe_summary(topic_decision.reason, max_chars=120),
+            status="failed",
+            error_type="GuardrailViolation",
+        )
+
     decision = state.get("intent_decision") or route_intent(state)
     return tracker.finish(
         {"intent_decision": decision},
