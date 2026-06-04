@@ -8,10 +8,11 @@
 
 ## 新窗口执行规则
 
-1. 先读 `AGENTS.md`、`README.md`、`docs/progress.md`、`docs/prd/super-agent-incremental.md` 和本任务卡。
-2. 核对任务 12 已完成。
-3. 只实现本任务范围；跑 Agent 验收。
-4. 用户要求 commit 时再提交。
+1. 执行前先压缩上下文。
+2. 先读 `AGENTS.md`、`README.md`、`docs/progress.md`、`docs/prd/super-agent-incremental.md` 和本任务卡。
+3. 核对任务 12 已完成。
+4. 只实现本任务范围；跑 Agent 验收。
+5. 执行完自动 git commit，message 为 `22`；不要自动 push，除非用户明确要求。
 
 ## 依赖
 
