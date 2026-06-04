@@ -9,7 +9,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | Phase 1: 15/15 · Incremental: [2/9 — progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [3/9 — progress.md](docs/progress.md) |
 | Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
 | Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
