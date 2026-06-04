@@ -34,6 +34,7 @@
 | `memory/read.py` | `load_memory` Graphiti search orchestration and degraded read errors |
 | `memory/policy.py` | Write candidates, sensitive filter, stability checks |
 | `workers/protocol.py` | Worker contracts and result mapping |
+| `workers/production.py` | Role-specific SiliconFlow-backed production workers |
 | `workers/mock.py` | Deterministic mock workers for dev/tests |
 | `workers/registry.py` | Worker lookup by role |
 
@@ -47,8 +48,8 @@
 | Context budget | `tests/unit_tests/test_context_budget.py` | — |
 | Direct answer | `tests/unit_tests/test_direct_answer.py` | `test_graph.py` |
 | MCP / ReAct | `tests/unit_tests/test_mcp_tools.py`, `test_react_loop.py` | `test_mcp_smoke.py`, `test_observability_paths.py` |
-| Planning | `tests/unit_tests/test_planning.py`, `test_plan_execute.py` | `test_graph.py`, `test_observability_paths.py` |
-| Multi-agent | `tests/unit_tests/test_orchestrator.py` | `test_graph.py` |
+| Planning | `tests/unit_tests/test_planning.py`, `test_plan_execute.py` | `test_graph.py`, `test_observability_paths.py`, `test_production_workers.py` |
+| Multi-agent | `tests/unit_tests/test_orchestrator.py`, `test_production_workers.py` | `test_graph.py`, `test_production_workers.py` |
 | Reflection | `tests/unit_tests/test_reflection.py` | `test_graph.py` |
 | Memory read/write | `tests/unit_tests/test_memory_read.py`, `test_memory_write.py` | `test_graphiti_memory.py`, `test_graph.py` |
 | Observability | `tests/unit_tests/test_observability.py` | `test_observability_paths.py` |
@@ -60,6 +61,6 @@
 | Area | Current behavior | Follow-up |
 |------|------------------|-----------|
 | `load_memory` | Reads Graphiti long-term memory by latest user message; failures are recorded in `memory_context.errors` | Add checkpoint short-term summary if needed |
-| Workers | `workers/mock.py` registry | Replace with production worker backends |
+| Workers | Production LLM registry by default; mock registry remains injectable for tests | Add richer role prompts/evals as usage data accumulates |
 | MCP tools | Example filesystem server via `MCP_EXAMPLE_*` | Backend-provided MCP servers |
 | LangGraph Platform | Not targeted | Local `langgraph dev` only (phase 1) |

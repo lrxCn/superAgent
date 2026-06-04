@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from dotenv import dotenv_values
+
 from agent.state import RuntimeConfig
 
 DEFAULT_OPENAI_BASE_URL = "https://api.siliconflow.cn/v1"
@@ -76,7 +78,7 @@ class AppConfig:
 
 def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
     """Load runtime defaults from environment variables."""
-    env = os.environ if env is None else env
+    env = _load_environment() if env is None else env
     return AppConfig(
         langchain_tracing_v2=_env_bool(env, "LANGCHAIN_TRACING_V2", True),
         langchain_project=env.get("LANGCHAIN_PROJECT", DEFAULT_LANGCHAIN_PROJECT),
@@ -109,3 +111,12 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         graphiti_mcp_url=env.get("GRAPHITI_MCP_URL", "http://localhost:8000"),
         falkordb_url=env.get("FALKORDB_URL", "redis://localhost:6379"),
     )
+
+
+def _load_environment() -> Mapping[str, str]:
+    file_env = {
+        key: value
+        for key, value in dotenv_values(".env").items()
+        if value is not None
+    }
+    return {**file_env, **os.environ}

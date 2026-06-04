@@ -9,7 +9,7 @@ from typing import Callable
 from agent.config import load_config
 from agent.observability import NodeTracker
 from agent.state import AgentResult, AgentState, Observation, RuntimeConfig
-from agent.workers.mock import create_mock_worker_registry
+from agent.workers import default_worker_registry
 from agent.workers.protocol import (
     ROLE_AGENT_NAMES,
     WorkerAggregateStatus,
@@ -236,7 +236,7 @@ def outputs_to_observations(outputs: list[WorkerOutput]) -> list[Observation]:
 class MultiAgentOrchestratorNode:
     """Select workers, execute them in parallel, and aggregate results."""
 
-    registry_factory: Callable[[], WorkerRegistry] = create_mock_worker_registry
+    registry_factory: Callable[[], WorkerRegistry] = default_worker_registry
     registry: WorkerRegistry | None = field(default=None, repr=False)
 
     def _registry(self) -> WorkerRegistry:

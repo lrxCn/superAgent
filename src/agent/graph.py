@@ -36,6 +36,7 @@ from agent.reflection import (
 from agent.router import route_intent
 from agent.state import AgentState, RuntimeConfig
 from agent.tools.mcp import MCPClient
+from agent.workers.production import create_production_worker_registry
 from agent.workers.registry import WorkerRegistry
 
 
@@ -203,13 +204,18 @@ def create_graph_builder(
     )
     graph_builder.add_node("plan_generate", create_plan_generate_node())
     graph_builder.add_node("plan_validate", create_plan_validate_node())
+    resolved_worker_registry = _resolve_worker_registry(worker_registry, llm_client)
     graph_builder.add_node(
         "execute_plan",
-        create_execute_plan_node(llm_client=llm_client, mcp_client=mcp_client),
+        create_execute_plan_node(
+            llm_client=llm_client,
+            mcp_client=mcp_client,
+            worker_registry=resolved_worker_registry,
+        ),
     )
     graph_builder.add_node("step_observe", create_step_observe_node())
     orchestrator_node = create_multi_agent_orchestrator_node(
-        registry=worker_registry if isinstance(worker_registry, WorkerRegistry) else None,
+        registry=resolved_worker_registry,
     )
     graph_builder.add_node("multi_agent_orchestrator", orchestrator_node)
     graph_builder.add_node("fallback", fallback)
@@ -278,6 +284,17 @@ def create_graph_builder(
     graph_builder.add_edge("memory_write", "final_answer")
     graph_builder.add_edge("final_answer", END)
     return graph_builder
+
+
+def _resolve_worker_registry(
+    worker_registry: object | None,
+    llm_client: LLMClient | None,
+) -> WorkerRegistry | None:
+    if isinstance(worker_registry, WorkerRegistry):
+        return worker_registry
+    if llm_client is not None:
+        return create_production_worker_registry(llm_client=llm_client)
+    return None
 
 
 def build_graph(

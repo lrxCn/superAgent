@@ -2,6 +2,7 @@ import pytest
 
 from agent.llm import FakeLLMClient
 from agent.nodes.planner import (
+    build_agent_step_input,
     create_execute_plan_node,
     create_plan_generate_node,
     create_plan_validate_node,
@@ -11,6 +12,8 @@ from agent.nodes.planner import (
 from agent.planning import validate_plan
 from agent.state import Plan
 from agent.tools.mcp import FakeMCPClient, ToolObservation, ToolSpec
+from agent.workers.mock import create_mock_worker_registry
+from agent.workers.registry import WorkerRegistry
 
 pytestmark = pytest.mark.anyio
 
@@ -149,7 +152,7 @@ async def test_execute_plan_runs_tool_step_with_mock_mcp() -> None:
     assert state["tool_calls"][0]["status"] == "completed"
 
 
-async def test_agent_step_is_marked_skipped() -> None:
+async def test_agent_step_runs_worker_and_completes() -> None:
     plan: Plan = {
         "steps": [
             {
@@ -163,7 +166,10 @@ async def test_agent_step_is_marked_skipped() -> None:
         ],
         "status": "running",
     }
-    execute = create_execute_plan_node(llm_client=FakeLLMClient(responses=["unused"]))
+    execute = create_execute_plan_node(
+        llm_client=FakeLLMClient(responses=["unused"]),
+        worker_registry=create_mock_worker_registry(),
+    )
     observe = create_step_observe_node()
 
     state = {
@@ -175,8 +181,65 @@ async def test_agent_step_is_marked_skipped() -> None:
     state = {**state, **await execute(state)}
     state = {**state, **await observe(state)}
 
-    assert state["plan"]["steps"][0]["status"] == "skipped"
-    assert "multi-agent" in state["plan"]["steps"][0]["result"].lower()
+    assert state["plan"]["steps"][0]["status"] == "completed"
+    assert "coder output" in state["plan"]["steps"][0]["result"].lower()
+    assert state["observations"][0]["source"] == "plan_agent:delegate:coder_agent"
+
+
+def test_agent_step_input_defaults_to_coder_role() -> None:
+    step = {
+        "id": "execute",
+        "title": "Execute the planned work",
+        "type": "agent",
+        "dependencies": [],
+        "acceptance_criteria": ["Primary work output is produced."],
+        "status": "pending",
+    }
+
+    worker_input = build_agent_step_input(
+        {"messages": [{"role": "user", "content": "Implement the task."}]},
+        step,
+    )
+
+    assert worker_input["role"] == "coder"
+    assert "Implement the task." in worker_input["task"]
+
+
+async def test_agent_step_worker_error_marks_step_failed() -> None:
+    async def failing_worker(_worker_input):
+        raise RuntimeError("agent worker unavailable")
+
+    registry = WorkerRegistry(workers={"coder": failing_worker})
+    plan: Plan = {
+        "steps": [
+            {
+                "id": "execute",
+                "title": "Execute implementation",
+                "type": "agent",
+                "dependencies": [],
+                "acceptance_criteria": ["Worker output recorded."],
+                "status": "pending",
+            }
+        ],
+        "status": "running",
+    }
+    execute = create_execute_plan_node(worker_registry=registry)
+    observe = create_step_observe_node()
+    state = {
+        "messages": [{"role": "user", "content": "Implement a change."}],
+        "runtime_config": _runtime_config(),
+        "plan": plan,
+        "observations": [],
+        "tool_calls": [],
+        "mcp_sessions": [],
+    }
+
+    state = {**state, **await execute(state)}
+    state = {**state, **await observe(state)}
+
+    assert state["plan"]["status"] == "failed"
+    assert state["plan"]["steps"][0]["status"] == "failed"
+    assert "agent worker unavailable" in state["plan"]["steps"][0]["result"]
 
 
 def test_generated_plan_passes_validation() -> None:

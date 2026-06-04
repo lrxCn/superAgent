@@ -9,7 +9,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | Phase 1: 15/15 · Incremental: [3/9 — progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [4/9 — progress.md](docs/progress.md) |
 | Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
 | Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
@@ -24,7 +24,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Context budget + deterministic compression | Implemented |
 | MCP ReAct loop + observation sanitization | Implemented (example filesystem MCP) |
 | Plan-and-execute (generate, validate, execute, observe) | Implemented |
-| Parallel multi-agent orchestrator | Implemented (mock workers) |
+| Parallel multi-agent orchestrator | Implemented (LLM workers; mock injectable for tests) |
 | Reflection gate, evaluator, revise, max rounds | Implemented |
 | Memory read/write policies + Graphiti client | Implemented (Graphiti read/write; read failure degrades) |
 | PostgreSQL checkpointer factory | Implemented (optional; memory fallback) |
@@ -32,7 +32,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | LangGraph Platform deployment | Planned (out of phase 1 scope) |
 | Production MCP servers | Planned (backend-provided; example server only) |
 | Long-term memory read on `load_memory` | Implemented (Graphiti search into `memory_context.long_term`) |
-| Production worker backends | Planned (mock registry today) |
+| Production worker backends | Implemented (researcher/coder/reviewer/memory manager via SiliconFlow) |
 
 ## Documentation Order
 
@@ -131,6 +131,8 @@ Configure with `MCP_EXAMPLE_SERVER_COMMAND` and `MCP_EXAMPLE_SERVER_ARGS`.
 ### Multi-Agent
 
 - Parallel orchestration with timeout and concurrency limits.
+- Default registry uses role-specific LLM workers: `researcher`, `coder`, `reviewer`, and `memory_manager`.
+- Plan `type: agent` steps execute a single worker and complete/fail like other plan steps.
 - Defaults: `WORKER_MAX_CONCURRENCY=4`, `WORKER_TIMEOUT_SECONDS=120`.
 - Worker timeout → `failed`; aggregation may be `partial`.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
@@ -40,6 +41,21 @@ from agent.tools.mcp import (
     tool_call_to_state_entry,
     validate_tool_arguments,
 )
+from agent.workers.production import create_production_worker_registry
+from agent.workers.protocol import (
+    ROLE_AGENT_NAMES,
+    WorkerInput,
+    WorkerOutput,
+    WorkerRole,
+)
+from agent.workers.registry import WorkerRegistry
+
+AGENT_ROLE_KEYWORDS: dict[WorkerRole, tuple[str, ...]] = {
+    "researcher": ("research", "investigate", "gather", "fact", "evidence", "调研", "研究"),
+    "coder": ("code", "implement", "execute", "build", "fix", "开发", "实现", "编码"),
+    "reviewer": ("review", "validate", "audit", "quality", "risk", "验证", "审查", "评审"),
+    "memory_manager": ("memory", "remember", "preference", "durable", "记忆", "偏好"),
+}
 
 TOOL_KEYWORDS = (
     "file",
@@ -120,6 +136,8 @@ class ExecutePlanNode:
 
     llm_factory: Callable[[], LLMClient] = create_siliconflow_llm
     mcp_factory: Callable[[], MCPClient] | None = None
+    worker_registry_factory: Callable[[], WorkerRegistry] = create_production_worker_registry
+    worker_registry: WorkerRegistry | None = None
     app_config: AppConfig | None = None
     _tools: list[ToolSpec] = field(default_factory=list, repr=False)
     _mcp_session: MCPSession | None = field(default=None, repr=False)
@@ -158,18 +176,8 @@ class ExecutePlanNode:
                     await self._execute_tool_step(state, step, tool_calls, mcp_sessions)
                 )
             else:
-                result = "Agent step deferred until multi-agent orchestration is available."
-                observation = {
-                    "source": f"plan_step:{step['id']}",
-                    "content": result,
-                    "error": None,
-                }
-                fallback_reason = None
-                running_plan = update_step_status(
-                    running_plan,
-                    step["id"],
-                    status="skipped",
-                    result=result,
+                result, observation, fallback_reason = await self._execute_agent_step(
+                    state, step
                 )
         except LLMProviderError as exc:
             result = str(exc)
@@ -198,11 +206,10 @@ class ExecutePlanNode:
         }
         if fallback_reason:
             updates["fallback_reason"] = fallback_reason
-        if step["type"] != "agent":
-            updates["step_result_pending"] = result
-            updates["step_status_pending"] = (
-                "failed" if observation.get("error") else "completed"
-            )
+        updates["step_result_pending"] = result
+        updates["step_status_pending"] = (
+            "failed" if observation.get("error") else "completed"
+        )
         return tracker.finish(
             updates,
             summary=f"step={step['id']} type={step['type']}",
@@ -337,6 +344,49 @@ class ExecutePlanNode:
         fallback = tool_observation.error
         return content, observation, fallback, tool_calls, mcp_sessions
 
+    async def _execute_agent_step(
+        self,
+        state: AgentState,
+        step: PlanStep,
+    ) -> tuple[str, Observation, str | None]:
+        registry = self._worker_registry()
+        role = _agent_step_role(step)
+        worker = registry.get(role)
+        if worker is None:
+            reason = f"No worker registered for role '{role}'."
+            return reason, _agent_step_observation(step, role, reason, reason), reason
+
+        worker_input = build_agent_step_input(state, step)
+        runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
+        try:
+            raw = await asyncio.wait_for(
+                worker(worker_input),
+                timeout=runtime_config["worker_timeout_seconds"],
+            )
+        except TimeoutError:
+            raw = {
+                "role": role,
+                "status": "failed",
+                "result": "",
+                "error": (
+                    "Worker timed out after "
+                    f"{runtime_config['worker_timeout_seconds']}s"
+                ),
+                "confidence": 0.0,
+            }
+        except Exception as exc:
+            raw = {
+                "role": role,
+                "status": "failed",
+                "result": "",
+                "error": safe_summary(exc, max_chars=200),
+                "confidence": 0.0,
+            }
+        output = _normalize_worker_output(raw, role)
+        content = output["result"] or (output.get("error") or "")
+        error = output.get("error") if output["status"] == "failed" else None
+        return content, _agent_step_observation(step, role, content, error), error
+
     def _create_client(self) -> MCPClient | None:
         if self.mcp_factory is not None:
             return self.mcp_factory()
@@ -344,6 +394,11 @@ class ExecutePlanNode:
         if not config.mcp_example_server_command or not config.mcp_example_server_args:
             return None
         return create_mcp_client(build_example_mcp_config(config))
+
+    def _worker_registry(self) -> WorkerRegistry:
+        if self.worker_registry is not None:
+            return self.worker_registry
+        return self.worker_registry_factory()
 
 
 @dataclass
@@ -361,7 +416,7 @@ class StepObserveNode:
         if observation:
             observations.append(observation)
 
-        if current_step and current_step["type"] != "agent":
+        if current_step:
             status = state.get("step_status_pending") or current_step["status"]
             result = state.get("step_result_pending")
             if status in {"completed", "failed"}:
@@ -403,6 +458,8 @@ def create_plan_validate_node() -> PlanValidateNode:
 def create_execute_plan_node(
     llm_client: LLMClient | None = None,
     mcp_client: MCPClient | None = None,
+    worker_registry: WorkerRegistry | None = None,
+    worker_registry_factory: Callable[[], WorkerRegistry] | None = None,
 ) -> ExecutePlanNode:
     """Create the plan execution node with optional test doubles."""
     llm_factory: Callable[[], LLMClient]
@@ -421,6 +478,26 @@ def create_execute_plan_node(
         def mcp_factory() -> MCPClient:
             return injected_mcp
 
+    if worker_registry is not None:
+        return ExecutePlanNode(
+            llm_factory=llm_factory,
+            mcp_factory=mcp_factory,
+            worker_registry=worker_registry,
+        )
+    if worker_registry_factory is not None:
+        return ExecutePlanNode(
+            llm_factory=llm_factory,
+            mcp_factory=mcp_factory,
+            worker_registry_factory=worker_registry_factory,
+        )
+    if llm_client is not None:
+        return ExecutePlanNode(
+            llm_factory=llm_factory,
+            mcp_factory=mcp_factory,
+            worker_registry_factory=lambda: create_production_worker_registry(
+                llm_client=llm_client
+            ),
+        )
     return ExecutePlanNode(llm_factory=llm_factory, mcp_factory=mcp_factory)
 
 
@@ -512,6 +589,19 @@ def build_llm_step_messages(state: AgentState, step: PlanStep) -> list[Message]:
     ]
 
 
+def build_agent_step_input(
+    state: AgentState,
+    step: PlanStep,
+) -> WorkerInput:
+    """Build the worker input for a plan ``type=agent`` step."""
+    role = _agent_step_role(step)
+    return {
+        "role": role,
+        "task": _agent_step_task(state, step),
+        "context": _agent_step_context(state, step),
+    }
+
+
 def choose_plan_validate_path(state: AgentState) -> str:
     """Route invalid plans to fallback."""
     plan = state.get("plan") or {"steps": [], "status": "failed"}
@@ -559,6 +649,86 @@ def _find_tool(tools: list[ToolSpec], tool_name: str) -> ToolSpec | None:
         if tool.name == tool_name:
             return tool
     return None
+
+
+def _agent_step_role(step: PlanStep) -> WorkerRole:
+    text = " ".join(
+        [
+            step.get("id", ""),
+            step.get("title", ""),
+            " ".join(step.get("acceptance_criteria", [])),
+        ]
+    ).lower()
+    for role, keywords in AGENT_ROLE_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return role
+    return "coder"
+
+
+def _agent_step_task(state: AgentState, step: PlanStep) -> str:
+    criteria = "; ".join(step.get("acceptance_criteria", []))
+    return "\n".join(
+        item
+        for item in [
+            f"Overall goal: {_latest_user_text(state)}",
+            f"Plan step: {step['title']} ({step['id']})",
+            f"Acceptance criteria: {criteria}" if criteria else "",
+        ]
+        if item
+    )
+
+
+def _agent_step_context(state: AgentState, step: PlanStep) -> str:
+    parts: list[str] = []
+    prior = _prior_step_results(state.get("plan"))
+    if prior:
+        parts.append("Prior step results:\n" + prior)
+
+    memory = state.get("memory_context")
+    if memory:
+        if memory.get("short_term"):
+            parts.append("Short-term memory:\n" + "\n".join(memory["short_term"][:3]))
+        if memory.get("long_term"):
+            parts.append("Long-term memory:\n" + "\n".join(memory["long_term"][:3]))
+
+    observations = state.get("observations", [])
+    if observations:
+        rendered = [
+            f"- {item['source']}: {item['content']}"
+            for item in observations[-3:]
+            if item.get("content")
+        ]
+        if rendered:
+            parts.append("Recent observations:\n" + "\n".join(rendered))
+
+    criteria = "; ".join(step.get("acceptance_criteria", []))
+    parts.append(f"Current acceptance criteria: {criteria or 'none'}")
+    return "\n\n".join(parts)
+
+
+def _normalize_worker_output(raw: WorkerOutput, role: WorkerRole) -> WorkerOutput:
+    if not isinstance(raw, dict):
+        return {
+            "role": role,
+            "status": "failed",
+            "result": "",
+            "error": "Worker returned an invalid payload.",
+            "confidence": 0.0,
+        }
+    return raw
+
+
+def _agent_step_observation(
+    step: PlanStep,
+    role: WorkerRole,
+    content: str,
+    error: str | None,
+) -> Observation:
+    return {
+        "source": f"plan_agent:{step['id']}:{ROLE_AGENT_NAMES[role]}",
+        "content": content,
+        "error": error,
+    }
 
 
 def _latest_user_text(state: AgentState) -> str:

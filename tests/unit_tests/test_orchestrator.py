@@ -226,7 +226,7 @@ async def test_orchestrator_node_returns_partial_on_mixed_results() -> None:
 
 
 async def test_orchestrator_node_completes_all_default_workers() -> None:
-    node = create_multi_agent_orchestrator_node()
+    node = create_multi_agent_orchestrator_node(registry=create_mock_worker_registry())
     state = {
         "messages": [{"role": "user", "content": "Run agents in parallel."}],
         "runtime_config": _runtime_config(),
@@ -244,3 +244,23 @@ async def test_orchestrator_node_completes_all_default_workers() -> None:
         "coder_agent",
         "reviewer_agent",
     }
+
+
+async def test_orchestrator_node_uses_production_registry_factory() -> None:
+    node = create_multi_agent_orchestrator_node(
+        registry_factory=lambda: create_mock_worker_registry(
+            {"researcher": MockWorkerBehavior(confidence=0.91)}
+        )
+    )
+    state = {
+        "messages": [{"role": "user", "content": "Use researcher agent in parallel."}],
+        "runtime_config": _runtime_config(),
+        "agent_results": [],
+        "observations": [],
+    }
+
+    result = await node(state)
+
+    assert result["agent_results"][0]["status"] == "completed"
+    assert result["agent_results"][1]["agent_name"] == "researcher_agent"
+    assert result["agent_results"][1]["confidence"] == 0.91

@@ -50,8 +50,8 @@ flowchart TD
 |------|-------------|-------|
 | `direct_answer` | `direct_answer` | SiliconFlow LLM, low-risk prompts |
 | `react_agent` | `react_agent` | Bounded ReAct loop + MCP tools |
-| `planner` | `plan_generate` → `plan_validate` → `execute_plan` ↔ `step_observe` | Deterministic plan generation; LLM/tool steps |
-| `multi_agent_orchestrator` | `multi_agent_orchestrator` | Parallel mock workers (researcher/coder/reviewer/…) |
+| `planner` | `plan_generate` → `plan_validate` → `execute_plan` ↔ `step_observe` | Deterministic plan generation; LLM/tool/agent steps |
+| `multi_agent_orchestrator` | `multi_agent_orchestrator` | Parallel LLM workers (researcher/coder/reviewer/memory manager) |
 | `fallback` | `fallback` | Clarification, validation failure, reflection exhaustion |
 
 Router implementation: `src/agent/router.py` (`route_intent`). Conditional edge selectors live beside nodes in `graph.py`, `planner.py`, and `reflection.py`.
