@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Phase 1 tasks | 15 / 15 ✅ |
-| Incremental tasks | 4 / 9 |
+| Incremental tasks | 5 / 9 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: [20 - Multi MCP and URL transport](./prompts/20-multi-mcp-and-url-transport.md)
+**Recommended next task**: [21 - Configurable guardrails](./prompts/21-configurable-guardrails.md)
 
 **PRD**: [super-agent-incremental.md](./prd/super-agent-incremental.md) · **Deferred**: [todolist.md](./todolist.md)
 
@@ -47,7 +47,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 | 17 | [Load memory read](./prompts/17-load-memory-read.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 18 | [Memory read write loop](./prompts/18-memory-read-write-loop.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 19 | [Production workers](./prompts/19-production-workers.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
-| 20 | [Multi MCP and URL transport](./prompts/20-multi-mcp-and-url-transport.md) | ⬜ 待开始 | - | G5 |
+| 20 | [Multi MCP and URL transport](./prompts/20-multi-mcp-and-url-transport.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 21 | [Configurable guardrails](./prompts/21-configurable-guardrails.md) | ⬜ 待开始 | - | G6；依赖 20 |
 | 22 | [LLM evaluator](./prompts/22-llm-evaluator.md) | ⬜ 待开始 | - | G7 |
 | 23 | [Tenant IDs and LangSmith Studio](./prompts/23-tenant-ids-and-langsmith-studio.md) | ⬜ 待开始 | - | G8；依赖 18；无自建 UI |
@@ -57,6 +57,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Completed task 20 multi MCP and URL transport; `MCP_SERVERS` supports stdio/SSE/Streamable HTTP, ReAct/Plan route `server.tool`, and stdio + HTTP MCP Agent 验收通过。 |
 | 2026-06-04 | Completed task 19 production workers; default registry uses LLM workers, plan agent steps execute, and real LLM Agent 验收通过。 |
 | 2026-06-04 | Completed task 18 memory read/write Graphiti loop; unit tests and Graphiti-backed Agent 验收通过。 |
 | 2026-06-04 | Completed task 17 load_memory Graphiti read; unit, lint, mypy, and Graphiti-backed Agent 验收通过。 |

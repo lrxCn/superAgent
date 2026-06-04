@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import shlex
 from dataclasses import dataclass, field
 from typing import Mapping
 
@@ -56,6 +58,7 @@ class AppConfig:
     checkpoint_setup: bool
     mcp_example_server_command: str
     mcp_example_server_args: str
+    mcp_servers: tuple[dict[str, object], ...]
     mcp_tool_timeout_seconds: int
     graphiti_backend: str
     graphiti_mcp_url: str
@@ -106,6 +109,7 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
             "MCP_EXAMPLE_SERVER_ARGS",
             "-y @modelcontextprotocol/server-filesystem ./docs",
         ),
+        mcp_servers=_env_mcp_servers(env),
         mcp_tool_timeout_seconds=_env_int(env, "MCP_TOOL_TIMEOUT_SECONDS", 30),
         graphiti_backend=env.get("GRAPHITI_BACKEND", "falkordb"),
         graphiti_mcp_url=env.get("GRAPHITI_MCP_URL", "http://localhost:8000"),
@@ -120,3 +124,99 @@ def _load_environment() -> Mapping[str, str]:
         if value is not None
     }
     return {**file_env, **os.environ}
+
+
+def _env_mcp_servers(env: Mapping[str, str]) -> tuple[dict[str, object], ...]:
+    raw = env.get("MCP_SERVERS")
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return ()
+        if not isinstance(payload, list):
+            return ()
+        return tuple(
+            normalized
+            for item in payload
+            if isinstance(item, dict)
+            for normalized in [_normalize_mcp_server(item)]
+            if normalized is not None
+        )
+
+    command = env.get("MCP_EXAMPLE_SERVER_COMMAND", "npx")
+    args = shlex.split(
+        env.get(
+            "MCP_EXAMPLE_SERVER_ARGS",
+            "-y @modelcontextprotocol/server-filesystem ./docs",
+        )
+    )
+    if not command or not args:
+        return ()
+    return (
+        {
+            "name": "filesystem",
+            "transport": "stdio",
+            "command": command,
+            "args": args,
+        },
+    )
+
+
+def _normalize_mcp_server(item: Mapping[str, object]) -> dict[str, object] | None:
+    name = str(item.get("name") or "").strip()
+    transport = str(item.get("transport") or "stdio").strip().lower().replace("-", "_")
+    if not name or transport not in {"stdio", "sse", "streamable_http"}:
+        return None
+
+    if transport == "stdio":
+        command = str(item.get("command") or "").strip()
+        raw_args = item.get("args", [])
+        if isinstance(raw_args, str):
+            args = shlex.split(raw_args)
+        elif isinstance(raw_args, list):
+            args = [str(arg) for arg in raw_args]
+        else:
+            args = []
+        if not command:
+            return None
+        normalized: dict[str, object] = {
+            "name": name,
+            "transport": transport,
+            "command": command,
+            "args": args,
+        }
+        if item.get("cwd"):
+            normalized["cwd"] = str(item["cwd"])
+        return normalized
+
+    url = str(item.get("url") or "").strip()
+    if not url:
+        return None
+    normalized = {
+        "name": name,
+        "transport": transport,
+        "url": url,
+    }
+    headers = item.get("headers")
+    if isinstance(headers, dict):
+        normalized["headers"] = {
+            str(key): str(value)
+            for key, value in headers.items()
+        }
+    timeout = item.get("timeout_seconds")
+    if isinstance(timeout, int | float):
+        normalized["timeout_seconds"] = float(timeout)
+    read_timeout = item.get("sse_read_timeout_seconds")
+    if isinstance(read_timeout, int | float):
+        normalized["sse_read_timeout_seconds"] = float(read_timeout)
+    if item.get("terminate_on_close") is not None:
+        normalized["terminate_on_close"] = _coerce_bool(item["terminate_on_close"])
+    return normalized
+
+
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)

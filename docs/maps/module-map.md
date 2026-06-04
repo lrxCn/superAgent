@@ -28,7 +28,7 @@
 | `planning.py` | Plan schema helpers, step scheduling, validation messages |
 | `reflection.py` | Reflection gate, rule-based evaluator, revise loop |
 | `llm.py` | SiliconFlow OpenAI-compatible client + `FakeLLMClient` |
-| `tools/mcp.py` | MCP client, tool protocol, observation sanitization |
+| `tools/mcp.py` | MCP clients for stdio/SSE/Streamable HTTP, multi-server routing, tool protocol, observation sanitization |
 | `memory/checkpoint.py` | Async PostgreSQL checkpointer factory + fallback |
 | `memory/graphiti.py` | Long-term memory client (HTTP/MCP + mock) |
 | `memory/read.py` | `load_memory` Graphiti search orchestration and degraded read errors |
@@ -47,7 +47,7 @@
 | LLM | `tests/unit_tests/test_llm.py` | — |
 | Context budget | `tests/unit_tests/test_context_budget.py` | — |
 | Direct answer | `tests/unit_tests/test_direct_answer.py` | `test_graph.py` |
-| MCP / ReAct | `tests/unit_tests/test_mcp_tools.py`, `test_react_loop.py` | `test_mcp_smoke.py`, `test_observability_paths.py` |
+| MCP / ReAct | `tests/unit_tests/test_mcp_tools.py`, `test_react_loop.py` | `test_mcp_smoke.py`, `test_mcp_multi.py`, `test_observability_paths.py` |
 | Planning | `tests/unit_tests/test_planning.py`, `test_plan_execute.py` | `test_graph.py`, `test_observability_paths.py`, `test_production_workers.py` |
 | Multi-agent | `tests/unit_tests/test_orchestrator.py`, `test_production_workers.py` | `test_graph.py`, `test_production_workers.py` |
 | Reflection | `tests/unit_tests/test_reflection.py` | `test_graph.py` |
@@ -62,5 +62,5 @@
 |------|------------------|-----------|
 | `load_memory` | Reads Graphiti long-term memory by latest user message; failures are recorded in `memory_context.errors` | Add checkpoint short-term summary if needed |
 | Workers | Production LLM registry by default; mock registry remains injectable for tests | Add richer role prompts/evals as usage data accumulates |
-| MCP tools | Example filesystem server via `MCP_EXAMPLE_*` | Backend-provided MCP servers |
+| MCP tools | Multi-server stdio/SSE/Streamable HTTP client via `MCP_SERVERS`; filesystem and public HTTP stand-ins documented | Backend-provided production MCP servers |
 | LangGraph Platform | Not targeted | Local `langgraph dev` only (phase 1) |

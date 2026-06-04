@@ -23,8 +23,8 @@ Callers may invoke the graph with only `messages`; `intake` normalizes the rest.
 | `plan` | `Plan` | Planner nodes | Steps, validation errors, status |
 | `current_step` | `PlanStep \| None` | `execute_plan`, `step_observe` | Active plan step |
 | `step_*_pending` | various | `execute_plan` | Staged step result for `step_observe` |
-| `mcp_sessions` | `list[MCPSession]` | ReAct / plan tool steps | Connection summary |
-| `tool_calls` | `list[ToolCall]` | ReAct / plan tool steps | Invocation history |
+| `mcp_sessions` | `list[MCPSession]` | ReAct / plan tool steps | Per-server connection summary |
+| `tool_calls` | `list[ToolCall]` | ReAct / plan tool steps | Invocation history, including optional `server.tool` names |
 | `observations` | `list[Observation]` | Tools, plan, workers | Sanitized observations |
 | `agent_results` | `list[AgentResult]` | `multi_agent_orchestrator` | Worker + orchestrator outputs |
 

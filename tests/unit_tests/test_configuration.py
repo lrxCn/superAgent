@@ -33,3 +33,45 @@ def test_load_config_uses_safe_defaults_and_redacts_secret_presence() -> None:
     assert config.react_max_steps == 5
     assert config.llm_max_tokens == 2048
     assert config.to_runtime_config()["react_max_steps"] == 5
+
+
+def test_load_config_parses_mcp_servers_json() -> None:
+    config = load_config(
+        {
+            "MCP_SERVERS": (
+                "["
+                '{"name":"filesystem","transport":"stdio","command":"npx",'
+                '"args":["-y","@modelcontextprotocol/server-filesystem","./docs"]},'
+                '{"name":"catalog","transport":"streamable_http",'
+                '"url":"https://crowcrowcrow.com/api/mcp/mcp"}'
+                "]"
+            )
+        }
+    )
+
+    assert len(config.mcp_servers) == 2
+    assert config.mcp_servers[0]["name"] == "filesystem"
+    assert config.mcp_servers[0]["args"] == [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./docs",
+    ]
+    assert config.mcp_servers[1]["transport"] == "streamable_http"
+
+
+def test_load_config_keeps_legacy_mcp_example_as_default_server() -> None:
+    config = load_config(
+        {
+            "MCP_EXAMPLE_SERVER_COMMAND": "npx",
+            "MCP_EXAMPLE_SERVER_ARGS": "-y server ./docs",
+        }
+    )
+
+    assert config.mcp_servers == (
+        {
+            "name": "filesystem",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "server", "./docs"],
+        },
+    )

@@ -17,9 +17,9 @@ from agent.tools.mcp import (
     ToolCallRequest,
     ToolObservation,
     ToolSpec,
-    build_example_mcp_config,
-    create_mcp_client,
+    create_configured_mcp_client,
     observation_to_state_entry,
+    server_name_for_client,
     tool_call_to_state_entry,
     validate_tool_arguments,
 )
@@ -76,31 +76,26 @@ class ReActNode:
             await client.connect()
             tools = await client.list_tools()
         except MCPConnectionError as exc:
-            await client.close()
+            await _safe_close_mcp_client(client)
             return self._mcp_failure_state(
                 state,
-                session_name=_session_name(client),
+                session_name=server_name_for_client(client),
                 reason=str(exc),
                 tool_calls=tool_calls,
                 observations=observations,
             )
 
-        session: MCPSession = {
-            "name": _session_name(client),
-            "status": "connected",
-            "tools": [tool.name for tool in tools],
-            "error": None,
-        }
+        sessions = _session_summaries(client, tools)
 
         if not tools:
-            await client.close()
+            await _safe_close_mcp_client(client)
             return self._mcp_failure_state(
                 state,
-                session_name=session["name"],
+                session_name=server_name_for_client(client),
                 reason="No MCP tools were discovered.",
                 tool_calls=tool_calls,
                 observations=observations,
-                mcp_sessions=[session],
+                mcp_sessions=sessions,
             )
 
         final_answer = state.get("final_answer")
@@ -108,12 +103,12 @@ class ReActNode:
         try:
             llm = self.llm_factory()
         except Exception as exc:
-            await client.close()
+            await _safe_close_mcp_client(client)
             reason = f"ReAct LLM initialization failed: {exc}"
             tracker.state = scratch
             return tracker.finish(
                 {
-                    "mcp_sessions": [session],
+                    "mcp_sessions": sessions,
                     "tool_calls": tool_calls,
                     "observations": observations,
                     "fallback_reason": reason,
@@ -266,7 +261,7 @@ class ReActNode:
                 }
             )
 
-        await client.close()
+        await _safe_close_mcp_client(client)
 
         if final_answer is None and fallback_reason:
             final_answer = state.get("final_answer") or f"Fallback: {fallback_reason}"
@@ -274,7 +269,7 @@ class ReActNode:
         tracker.state = scratch
         return tracker.finish(
             {
-                "mcp_sessions": [session],
+                "mcp_sessions": sessions,
                 "tool_calls": tool_calls,
                 "observations": observations,
                 "fallback_reason": fallback_reason,
@@ -284,7 +279,7 @@ class ReActNode:
             },
             summary=(
                 f"tool_calls={len(tool_calls)} observations={len(observations)} "
-                f"session={session['name']}"
+                f"sessions={len(sessions)}"
             ),
             status="failed" if fallback_reason else "completed",
             error_type="ReActError" if fallback_reason else None,
@@ -294,9 +289,7 @@ class ReActNode:
         if self.mcp_factory is not None:
             return self.mcp_factory()
         config = self.app_config or load_config()
-        if not config.mcp_example_server_command or not config.mcp_example_server_args:
-            return None
-        return create_mcp_client(build_example_mcp_config(config))
+        return create_configured_mcp_client(config)
 
     def _mcp_failure_state(
         self,
@@ -423,11 +416,25 @@ def _latest_user_text(state: AgentState) -> str:
     return ""
 
 
-def _session_name(client: MCPClient) -> str:
-    config = getattr(client, "config", None)
-    if config is not None and hasattr(config, "name"):
-        return str(config.name)
-    return "mcp"
+def _session_summaries(client: MCPClient, tools: list[ToolSpec]) -> list[MCPSession]:
+    summary_factory = getattr(client, "session_summaries", None)
+    if callable(summary_factory):
+        return cast(list[MCPSession], summary_factory())
+    return [
+        {
+            "name": server_name_for_client(client),
+            "status": "connected",
+            "tools": [tool.name for tool in tools],
+            "error": None,
+        }
+    ]
+
+
+async def _safe_close_mcp_client(client: MCPClient) -> None:
+    try:
+        await client.close()
+    except Exception:
+        pass
 
 
 def _extract_json_object(raw: str) -> dict[str, object] | None:

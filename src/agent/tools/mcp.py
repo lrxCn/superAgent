@@ -8,8 +8,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, cast
 
+import httpx
 from mcp import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp.types import TextContent
 
 from agent.config import AppConfig, load_config
@@ -66,6 +69,10 @@ class MCPUrlConfig:
     url: str
     transport: Literal["sse", "streamable_http"] = "sse"
     name: str = "remote"
+    headers: dict[str, str] = field(default_factory=dict)
+    timeout_seconds: float = 30.0
+    sse_read_timeout_seconds: float = 300.0
+    terminate_on_close: bool = False
 
 
 MCPConfig = MCPStdioConfig | MCPUrlConfig
@@ -112,6 +119,55 @@ def build_example_mcp_config(config: AppConfig | None = None) -> MCPStdioConfig:
         args=args,
         name="example_filesystem",
     )
+
+
+def build_mcp_configs(config: AppConfig | None = None) -> list[MCPConfig]:
+    """Build all configured MCP server definitions."""
+    config = load_config() if config is None else config
+    if not config.mcp_servers:
+        return []
+
+    configs: list[MCPConfig] = []
+    for item in config.mcp_servers:
+        transport = str(item.get("transport") or "stdio").replace("-", "_")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        if transport == "stdio":
+            raw_args = item.get("args", [])
+            args = [str(arg) for arg in raw_args] if isinstance(raw_args, list) else []
+            configs.append(
+                MCPStdioConfig(
+                    command=str(item.get("command") or ""),
+                    args=args,
+                    name=name,
+                    cwd=str(item["cwd"]) if item.get("cwd") else None,
+                )
+            )
+            continue
+        if transport in {"sse", "streamable_http"}:
+            configs.append(
+                MCPUrlConfig(
+                    url=str(item.get("url") or ""),
+                    transport=cast(Literal["sse", "streamable_http"], transport),
+                    name=name,
+                    headers=(
+                        cast(dict[str, str], item.get("headers"))
+                        if isinstance(item.get("headers"), dict)
+                        else {}
+                    ),
+                    timeout_seconds=_config_float(
+                        item.get("timeout_seconds"),
+                        30.0,
+                    ),
+                    sse_read_timeout_seconds=_config_float(
+                        item.get("sse_read_timeout_seconds"),
+                        300.0,
+                    ),
+                    terminate_on_close=bool(item.get("terminate_on_close", False)),
+                )
+            )
+    return configs
 
 
 def validate_tool_arguments(
@@ -200,6 +256,7 @@ class FakeMCPClient:
     delay_seconds: float = 0.0
     connected: bool = False
     calls: list[ToolCallRequest] = field(default_factory=list)
+    config: object | None = None
 
     async def connect(self) -> None:
         """Simulate MCP connection."""
@@ -330,22 +387,80 @@ class StdioMCPClient:
 
 @dataclass
 class UrlMCPClient:
-    """Placeholder for future URL/SSE MCP transport support."""
+    """Connect to an MCP server over SSE or Streamable HTTP."""
 
     config: MCPUrlConfig
+    _session: ClientSession | None = field(default=None, init=False, repr=False)
+    _session_context: Any = field(default=None, init=False, repr=False)
+    _transport_context: Any = field(default=None, init=False, repr=False)
+    _http_client: httpx.AsyncClient | None = field(default=None, init=False, repr=False)
+    _tools: list[ToolSpec] = field(default_factory=list, init=False, repr=False)
+    _session_id: str | None = field(default=None, init=False, repr=False)
 
     async def connect(self) -> None:
-        """Raise until URL transport is implemented."""
-        raise MCPConnectionError(
-            f"MCP URL transport ({self.config.transport}) is not implemented yet."
-        )
+        """Initialize an MCP session over URL transport."""
+        try:
+            if self.config.transport == "sse":
+                self._transport_context = sse_client(
+                    self.config.url,
+                    headers=self.config.headers or None,
+                    timeout=self.config.timeout_seconds,
+                    sse_read_timeout=self.config.sse_read_timeout_seconds,
+                )
+                read, write = await self._transport_context.__aenter__()
+            else:
+                timeout = httpx.Timeout(
+                    self.config.timeout_seconds,
+                    read=self.config.sse_read_timeout_seconds,
+                )
+                self._http_client = httpx.AsyncClient(
+                    headers=self.config.headers or None,
+                    timeout=timeout,
+                )
+                self._transport_context = streamable_http_client(
+                    self.config.url,
+                    http_client=self._http_client,
+                    terminate_on_close=self.config.terminate_on_close,
+                )
+                read, write, get_session_id = await self._transport_context.__aenter__()
+                self._session_id = get_session_id()
+
+            self._session_context = ClientSession(read, write)
+            self._session = await self._session_context.__aenter__()
+            await self._session.initialize()
+            tools_result = await self._session.list_tools()
+        except Exception as exc:
+            await self.close()
+            raise MCPConnectionError(
+                f"MCP URL connection failed for '{self.config.name}': {exc}"
+            ) from exc
+
+        self._tools = [
+            ToolSpec(
+                name=tool.name,
+                description=tool.description or "",
+                input_schema=_tool_input_schema(tool),
+            )
+            for tool in tools_result.tools
+        ]
 
     async def close(self) -> None:
-        """No-op placeholder."""
+        """Close the MCP session and URL transport."""
+        if self._session_context is not None:
+            await self._session_context.__aexit__(None, None, None)
+            self._session_context = None
+            self._session = None
+        if self._transport_context is not None:
+            await self._transport_context.__aexit__(None, None, None)
+            self._transport_context = None
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+        self._tools = []
 
     async def list_tools(self) -> list[ToolSpec]:
-        """Return no tools because URL transport is unavailable."""
-        return []
+        """Return tools discovered during connect."""
+        return list(self._tools)
 
     async def call_tool(
         self,
@@ -354,10 +469,190 @@ class UrlMCPClient:
         *,
         timeout_seconds: float,
     ) -> ToolObservation:
-        """Raise because URL transport is unavailable."""
-        raise MCPConnectionError(
-            f"MCP URL transport ({self.config.transport}) is not implemented yet."
+        """Execute an MCP tool call with timeout handling."""
+        if self._session is None:
+            raise MCPConnectionError("MCP session is not connected.")
+
+        try:
+            result = await asyncio.wait_for(
+                self._session.call_tool(tool_name, arguments),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise MCPToolError(f"Tool '{tool_name}' timed out after {timeout_seconds}s") from exc
+        except Exception as exc:
+            raise MCPToolError(f"Tool '{tool_name}' failed: {exc}") from exc
+
+        if result.isError:
+            content = _render_tool_result(result.content)
+            return ToolObservation(
+                tool_name=tool_name,
+                content=sanitize_tool_content(content),
+                success=False,
+                error=content or f"Tool '{tool_name}' returned an error.",
+            )
+
+        return ToolObservation(
+            tool_name=tool_name,
+            content=sanitize_tool_content(_render_tool_result(result.content)),
+            success=True,
         )
+
+
+@dataclass
+class MultiMCPClient:
+    """Aggregate multiple MCP servers and route calls by qualified tool name."""
+
+    configs: list[MCPConfig]
+    clients: list[MCPClient] = field(default_factory=list)
+    _tools: list[ToolSpec] = field(default_factory=list, init=False, repr=False)
+    _tool_routes: dict[str, tuple[MCPClient, str]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+    _server_tools: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
+    _errors: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    _close_errors: list[str] = field(default_factory=list, init=False, repr=False)
+
+    async def connect(self) -> None:
+        """Connect to all configured servers and expose namespaced tools."""
+        if not self.clients:
+            self.clients = [create_mcp_client(config) for config in self.configs]
+        self._tools = []
+        self._tool_routes = {}
+        self._server_tools = {}
+        self._errors = {}
+
+        for client in self.clients:
+            server_name = server_name_for_client(client)
+            try:
+                await client.connect()
+                tools = await client.list_tools()
+            except MCPConnectionError as exc:
+                self._errors[server_name] = str(exc)
+                continue
+
+            self._server_tools[server_name] = []
+            for tool in tools:
+                qualified = qualify_tool_name(server_name, tool.name)
+                self._tool_routes[qualified] = (client, tool.name)
+                self._server_tools[server_name].append(qualified)
+                self._tools.append(
+                    ToolSpec(
+                        name=qualified,
+                        description=_qualified_description(server_name, tool.description),
+                        input_schema=tool.input_schema,
+                    )
+                )
+
+        self._add_unqualified_aliases()
+        if not self._tools:
+            message = "No MCP tools were discovered."
+            if self._errors:
+                details = "; ".join(
+                    f"{server}: {error}" for server, error in self._errors.items()
+                )
+                message = f"{message} {details}"
+            raise MCPConnectionError(message)
+
+    async def close(self) -> None:
+        """Close all child MCP clients."""
+        errors: list[str] = []
+        for client in self.clients:
+            try:
+                await client.close()
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException as exc:
+                errors.append(str(exc))
+        self._tools = []
+        self._tool_routes = {}
+        self._close_errors = errors
+
+    async def list_tools(self) -> list[ToolSpec]:
+        """Return all discovered qualified tools."""
+        return list(self._tools)
+
+    async def call_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, object],
+        *,
+        timeout_seconds: float,
+    ) -> ToolObservation:
+        """Route a tool call to the configured server."""
+        route = self._tool_routes.get(tool_name)
+        if route is None:
+            route = self._resolve_unqualified(tool_name)
+        if route is None:
+            raise MCPToolError(f"Unknown MCP tool '{tool_name}'.")
+
+        client, raw_tool_name = route
+        observation = await client.call_tool(
+            raw_tool_name,
+            arguments,
+            timeout_seconds=timeout_seconds,
+        )
+        server_name = server_name_for_client(client)
+        return ToolObservation(
+            tool_name=qualify_tool_name(server_name, observation.tool_name),
+            content=observation.content,
+            success=observation.success,
+            error=observation.error,
+        )
+
+    def session_summaries(self) -> list[dict[str, object]]:
+        """Return connection summaries for graph state."""
+        summaries: list[dict[str, object]] = []
+        server_names = [
+            server_name_for_config(config)
+            for config in self.configs
+        ] or [server_name_for_client(client) for client in self.clients]
+        for server_name in server_names:
+            error = self._errors.get(server_name)
+            summaries.append(
+                {
+                    "name": server_name,
+                    "status": "failed" if error else "connected",
+                    "tools": self._server_tools.get(server_name, []),
+                    "error": error,
+                }
+            )
+        return summaries
+
+    def _add_unqualified_aliases(self) -> None:
+        raw_to_routes: dict[str, list[tuple[MCPClient, str]]] = {}
+        raw_to_spec: dict[str, ToolSpec] = {}
+        for qualified, route in self._tool_routes.items():
+            raw_name = route[1]
+            raw_to_routes.setdefault(raw_name, []).append(route)
+            raw_to_spec[raw_name] = next(
+                tool for tool in self._tools if tool.name == qualified
+            )
+
+        for raw_name, routes in raw_to_routes.items():
+            if len(routes) != 1 or raw_name in self._tool_routes:
+                continue
+            self._tool_routes[raw_name] = routes[0]
+            raw_spec = raw_to_spec[raw_name]
+            self._tools.append(
+                ToolSpec(
+                    name=raw_name,
+                    description=raw_spec.description,
+                    input_schema=raw_spec.input_schema,
+                )
+            )
+
+    def _resolve_unqualified(self, tool_name: str) -> tuple[MCPClient, str] | None:
+        matches = [
+            route
+            for qualified, route in self._tool_routes.items()
+            if qualified.endswith(f".{tool_name}")
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
 
 def create_mcp_client(config: MCPConfig) -> MCPClient:
@@ -367,11 +662,61 @@ def create_mcp_client(config: MCPConfig) -> MCPClient:
     return UrlMCPClient(config=config)
 
 
+def create_multi_mcp_client(configs: list[MCPConfig]) -> MCPClient:
+    """Create a single client that routes across multiple MCP servers."""
+    return MultiMCPClient(configs=configs)
+
+
+def create_configured_mcp_client(config: AppConfig | None = None) -> MCPClient | None:
+    """Create the configured MCP client, preserving no-server as None."""
+    configs = build_mcp_configs(config)
+    if not configs:
+        return None
+    return create_multi_mcp_client(configs)
+
+
+def qualify_tool_name(server_name: str, tool_name: str) -> str:
+    """Return the server-qualified tool name used for routing."""
+    if tool_name.startswith(f"{server_name}."):
+        return tool_name
+    return f"{server_name}.{tool_name}"
+
+
+def split_tool_name(tool_name: str) -> tuple[str | None, str]:
+    """Split an optional ``server.tool`` name into server and raw tool parts."""
+    server, separator, raw_name = tool_name.partition(".")
+    if not separator:
+        return None, tool_name
+    return server, raw_name
+
+
+def server_name_for_client(client: MCPClient) -> str:
+    """Read the configured server name from a client."""
+    config = getattr(client, "config", None)
+    if config is not None and hasattr(config, "name"):
+        return str(config.name)
+    return "mcp"
+
+
+def server_name_for_config(config: MCPConfig) -> str:
+    """Read the configured server name from config."""
+    return str(config.name)
+
+
 def _tool_input_schema(tool: object) -> dict[str, object]:
     schema = getattr(tool, "inputSchema", None)
     if isinstance(schema, dict):
         return schema
     return {"type": "object", "properties": {}}
+
+
+def _config_float(value: object, default: float) -> float:
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
 
 
 def _render_tool_result(content: object) -> str:
@@ -414,3 +759,10 @@ def _sanitize_value(value: object) -> object:
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     return value
+
+
+def _qualified_description(server_name: str, description: str) -> str:
+    prefix = f"[{server_name}]"
+    if description:
+        return f"{prefix} {description}"
+    return prefix

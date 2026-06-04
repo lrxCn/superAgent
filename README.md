@@ -9,7 +9,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | Phase 1: 15/15 · Incremental: [4/9 — progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [5/9 — progress.md](docs/progress.md) |
 | Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
 | Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
@@ -22,7 +22,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | State schema, graph wiring, SiliconFlow LLM | Implemented |
 | Intent router (direct / ReAct / plan / multi-agent / fallback) | Implemented |
 | Context budget + deterministic compression | Implemented |
-| MCP ReAct loop + observation sanitization | Implemented (example filesystem MCP) |
+| MCP ReAct loop + observation sanitization | Implemented (multi-server stdio + URL transport) |
 | Plan-and-execute (generate, validate, execute, observe) | Implemented |
 | Parallel multi-agent orchestrator | Implemented (LLM workers; mock injectable for tests) |
 | Reflection gate, evaluator, revise, max rounds | Implemented |
@@ -30,7 +30,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | PostgreSQL checkpointer factory | Implemented (optional; memory fallback) |
 | Runtime events + path metrics | Implemented |
 | LangGraph Platform deployment | Planned (out of phase 1 scope) |
-| Production MCP servers | Planned (backend-provided; example server only) |
+| Production MCP servers | Planned (backend-provided; local/public stand-ins documented) |
 | Long-term memory read on `load_memory` | Implemented (Graphiti search into `memory_context.long_term`) |
 | Production worker backends | Implemented (researcher/coder/reviewer/memory manager via SiliconFlow) |
 
@@ -120,13 +120,17 @@ Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](doc
 ### Tools
 
 - External tools via MCP (`tools/mcp.py`).
-- Example connectivity server (phase 1):
+- Supported transports: stdio, SSE, and Streamable HTTP.
+- Configure one or more servers with `MCP_SERVERS` JSON. Tool names are exposed as `server.tool`; when a raw tool name is unique, the legacy bare name also works.
+- ReAct and Plan tool steps route by the configured server prefix, for example `filesystem.read_file` or `crow_catalog.products.search`.
+- Example stdio server:
 
 ```bash
 npx -y @modelcontextprotocol/server-filesystem ./docs
 ```
 
-Configure with `MCP_EXAMPLE_SERVER_COMMAND` and `MCP_EXAMPLE_SERVER_ARGS`.
+- Public Streamable HTTP stand-in used for smoke tests and docs: `https://crowcrowcrow.com/api/mcp/mcp` (`crow_catalog`). This is not a production backend dependency.
+- `MCP_EXAMPLE_SERVER_COMMAND` and `MCP_EXAMPLE_SERVER_ARGS` are still accepted as a single-server fallback when `MCP_SERVERS` is unset.
 
 ### Multi-Agent
 
@@ -173,6 +177,7 @@ CHECKPOINT_SETUP=true
 
 MCP_EXAMPLE_SERVER_COMMAND=npx
 MCP_EXAMPLE_SERVER_ARGS=-y @modelcontextprotocol/server-filesystem ./docs
+MCP_SERVERS=[{"name":"filesystem","transport":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","./docs"]},{"name":"crow_catalog","transport":"streamable_http","url":"https://crowcrowcrow.com/api/mcp/mcp"}]
 MCP_TOOL_TIMEOUT_SECONDS=30
 
 GRAPHITI_BACKEND=falkordb
@@ -194,7 +199,7 @@ uv run mypy src
 uv run langgraph dev
 ```
 
-Optional smoke (real services): PostgreSQL checkpoint, Graphiti, MCP filesystem server — see integration tests marked optional/skipped in CI.
+Optional smoke (real services): PostgreSQL checkpoint, Graphiti, MCP filesystem + local/public HTTP servers — see integration tests marked optional/skipped in CI.
 
 ## Maintenance
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import dataclass, field
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, cast
 
 from agent.config import AppConfig, load_config
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
@@ -35,9 +35,9 @@ from agent.tools.mcp import (
     ToolCallRequest,
     ToolObservation,
     ToolSpec,
-    build_example_mcp_config,
-    create_mcp_client,
+    create_configured_mcp_client,
     observation_to_state_entry,
+    server_name_for_client,
     tool_call_to_state_entry,
     validate_tool_arguments,
 )
@@ -139,8 +139,6 @@ class ExecutePlanNode:
     worker_registry_factory: Callable[[], WorkerRegistry] = create_production_worker_registry
     worker_registry: WorkerRegistry | None = None
     app_config: AppConfig | None = None
-    _tools: list[ToolSpec] = field(default_factory=list, repr=False)
-    _mcp_session: MCPSession | None = field(default=None, repr=False)
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Run the next runnable plan step and stage its observation."""
@@ -251,20 +249,13 @@ class ExecutePlanNode:
             return reason, observation, reason, tool_calls, mcp_sessions
 
         try:
-            if not self._tools:
-                await client.connect()
-                self._tools = await client.list_tools()
-                self._mcp_session = {
-                    "name": _session_name(client),
-                    "status": "connected",
-                    "tools": [tool.name for tool in self._tools],
-                    "error": None,
-                }
-                mcp_sessions = [*mcp_sessions, self._mcp_session]
+            await client.connect()
+            tools = await client.list_tools()
+            mcp_sessions = [*mcp_sessions, *_session_summaries(client, tools)]
         except MCPConnectionError as exc:
             reason = str(exc)
             session: MCPSession = {
-                "name": _session_name(client),
+                "name": server_name_for_client(client),
                 "status": "failed",
                 "tools": [],
                 "error": reason,
@@ -274,11 +265,11 @@ class ExecutePlanNode:
                 "content": reason,
                 "error": reason,
             }
-            await client.close()
+            await _safe_close_mcp_client(client)
             return reason, observation, reason, tool_calls, [*mcp_sessions, session]
 
-        tool_name = step.get("tool_name") or (self._tools[0].name if self._tools else "")
-        tool_spec = _find_tool(self._tools, tool_name)
+        tool_name = step.get("tool_name") or (tools[0].name if tools else "")
+        tool_spec = _find_tool(tools, tool_name)
         arguments = step.get("tool_arguments") or _default_tool_arguments(step)
         request = ToolCallRequest(tool_name=tool_name, arguments=arguments)
         runtime_config = state.get("runtime_config") or load_config().to_runtime_config()
@@ -290,7 +281,7 @@ class ExecutePlanNode:
             observation = observation_to_state_entry(
                 ToolObservation(tool_name=tool_name, content=error, success=False, error=error)
             )
-            await client.close()
+            await _safe_close_mcp_client(client)
             return error, observation, error, tool_calls, mcp_sessions
 
         validation_error = validate_tool_arguments(tool_spec, arguments)
@@ -306,7 +297,7 @@ class ExecutePlanNode:
                     error=validation_error,
                 )
             )
-            await client.close()
+            await _safe_close_mcp_client(client)
             return validation_error, observation, validation_error, tool_calls, mcp_sessions
 
         try:
@@ -326,7 +317,7 @@ class ExecutePlanNode:
                     error=error,
                 )
             )
-            await client.close()
+            await _safe_close_mcp_client(client)
             return error, observation, error, tool_calls, mcp_sessions
 
         tool_calls.append(
@@ -337,9 +328,7 @@ class ExecutePlanNode:
             )
         )
         observation = observation_to_state_entry(tool_observation)
-        await client.close()
-        self._tools = []
-        self._mcp_session = None
+        await _safe_close_mcp_client(client)
         content = tool_observation.content
         fallback = tool_observation.error
         return content, observation, fallback, tool_calls, mcp_sessions
@@ -391,9 +380,7 @@ class ExecutePlanNode:
         if self.mcp_factory is not None:
             return self.mcp_factory()
         config = self.app_config or load_config()
-        if not config.mcp_example_server_command or not config.mcp_example_server_args:
-            return None
-        return create_mcp_client(build_example_mcp_config(config))
+        return create_configured_mcp_client(config)
 
     def _worker_registry(self) -> WorkerRegistry:
         if self.worker_registry is not None:
@@ -738,11 +725,25 @@ def _latest_user_text(state: AgentState) -> str:
     return ""
 
 
-def _session_name(client: MCPClient) -> str:
-    config = getattr(client, "config", None)
-    if config is not None and hasattr(config, "name"):
-        return str(config.name)
-    return "mcp"
+def _session_summaries(client: MCPClient, tools: list[ToolSpec]) -> list[MCPSession]:
+    summary_factory = getattr(client, "session_summaries", None)
+    if callable(summary_factory):
+        return cast(list[MCPSession], summary_factory())
+    return [
+        {
+            "name": server_name_for_client(client),
+            "status": "connected",
+            "tools": [tool.name for tool in tools],
+            "error": None,
+        }
+    ]
+
+
+async def _safe_close_mcp_client(client: MCPClient) -> None:
+    try:
+        await client.close()
+    except Exception:
+        pass
 
 
 def parse_plan_step_payload(raw: str) -> dict[str, object] | None:

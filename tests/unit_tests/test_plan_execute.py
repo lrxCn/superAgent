@@ -11,7 +11,14 @@ from agent.nodes.planner import (
 )
 from agent.planning import validate_plan
 from agent.state import Plan
-from agent.tools.mcp import FakeMCPClient, ToolObservation, ToolSpec
+from agent.tools.mcp import (
+    FakeMCPClient,
+    MCPStdioConfig,
+    MCPUrlConfig,
+    MultiMCPClient,
+    ToolObservation,
+    ToolSpec,
+)
 from agent.workers.mock import create_mock_worker_registry
 from agent.workers.registry import WorkerRegistry
 
@@ -150,6 +157,79 @@ async def test_execute_plan_runs_tool_step_with_mock_mcp() -> None:
     assert any(step["type"] == "tool" for step in state["plan"]["steps"])
     assert state["tool_calls"]
     assert state["tool_calls"][0]["status"] == "completed"
+
+
+async def test_execute_plan_routes_server_qualified_tool_step() -> None:
+    filesystem = FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="read_file",
+                description="Read a file",
+                input_schema={"type": "object", "properties": {}},
+            )
+        ]
+    )
+    filesystem.config = MCPStdioConfig(command="npx", args=[], name="filesystem")
+    catalog = FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="products.search",
+                description="Search products",
+                input_schema={
+                    "type": "object",
+                    "required": ["query"],
+                    "properties": {"query": {"type": "string"}},
+                },
+            )
+        ],
+        responses={
+            "products.search": ToolObservation(
+                tool_name="products.search",
+                content="catalog result",
+                success=True,
+            )
+        },
+    )
+    catalog.config = MCPUrlConfig(
+        url="http://127.0.0.1:8000/mcp",
+        transport="streamable_http",
+        name="catalog",
+    )
+    plan: Plan = {
+        "steps": [
+            {
+                "id": "catalog",
+                "title": "Search remote catalog",
+                "type": "tool",
+                "dependencies": [],
+                "acceptance_criteria": ["Remote tool output captured."],
+                "status": "pending",
+                "tool_name": "catalog.products.search",
+                "tool_arguments": {"query": "protein"},
+            }
+        ],
+        "status": "running",
+    }
+    execute = create_execute_plan_node(
+        mcp_client=MultiMCPClient(configs=[], clients=[filesystem, catalog])
+    )
+    observe = create_step_observe_node()
+    state = {
+        "messages": [{"role": "user", "content": "Search product catalog."}],
+        "runtime_config": _runtime_config(),
+        "plan": plan,
+        "observations": [],
+        "tool_calls": [],
+        "mcp_sessions": [],
+    }
+
+    state = {**state, **await execute(state)}
+    state = {**state, **await observe(state)}
+
+    assert state["plan"]["status"] == "completed"
+    assert state["tool_calls"][0]["tool_name"] == "catalog.products.search"
+    assert catalog.calls[0].tool_name == "products.search"
+    assert not filesystem.calls
 
 
 async def test_agent_step_runs_worker_and_completes() -> None:
