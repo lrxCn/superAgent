@@ -1,6 +1,9 @@
 # OS
 .DS_Store
 
+# LangSmith trace exports (local debugging artifacts)
+.langsmith_traces/
+
 # Node
 node_modules/
 

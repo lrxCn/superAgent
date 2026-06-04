@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
@@ -211,7 +212,10 @@ async def final_answer(state: AgentState) -> AgentState:
         or "SuperAgent runtime skeleton completed without a generated answer."
     )
     return tracker.finish(
-        {"final_answer": answer},
+        {
+            "final_answer": answer,
+            "messages": [AIMessage(content=answer)],
+        },
         summary=f"final_answer_chars={len(answer)}",
     )
 
