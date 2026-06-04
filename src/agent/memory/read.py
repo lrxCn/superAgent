@@ -8,7 +8,13 @@ from typing import Protocol
 from agent.config import load_config
 from agent.memory.graphiti import LongTermMemoryClient, create_graphiti_client
 from agent.observability import NodeTracker, safe_summary
-from agent.state import AgentState, MemoryContext, Message
+from agent.state import (
+    AgentState,
+    MemoryContext,
+    Message,
+    is_user_message,
+    message_content_text,
+)
 
 
 class MemoryClientFactory(Protocol):
@@ -97,8 +103,8 @@ def normalize_memory_context(memory_context: MemoryContext | None) -> MemoryCont
 def latest_user_query(messages: list[Message]) -> str:
     """Return the newest user message content for memory search."""
     for message in reversed(messages):
-        if message.get("role") == "user":
-            return message.get("content", "").strip()
+        if is_user_message(message):
+            return message_content_text(message).strip()
     return ""
 
 

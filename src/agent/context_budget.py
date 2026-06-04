@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from agent.state import AgentState, ContextBudget, MemoryContext, Message
+from agent.state import (
+    AgentState,
+    ContextBudget,
+    MemoryContext,
+    Message,
+    message_content_text,
+    message_role,
+)
 
 APPROX_CHARS_PER_TOKEN = 4
 DEFAULT_RECENT_MESSAGE_COUNT = 4
@@ -29,7 +36,7 @@ def estimate_state_tokens(state: AgentState) -> int:
     """Estimate context usage from messages, memory, tools, and observations."""
     total = 0
     for message in state.get("messages", []):
-        total += estimate_tokens(f"{message['role']}: {message['content']}")
+        total += estimate_tokens(f"{message_role(message)}: {message_content_text(message)}")
 
     memory_context = state.get("memory_context")
     if memory_context:
@@ -125,7 +132,7 @@ def _compress_messages(
 ) -> tuple[list[Message], int]:
     protected_indexes: set[int] = set()
     for index, message in enumerate(messages):
-        if message["role"] == "system":
+        if message_role(message) == "system":
             protected_indexes.add(index)
 
     current_goal_index = _last_user_message_index(messages)
@@ -143,7 +150,7 @@ def _compress_messages(
 
 def _last_user_message_index(messages: list[Message]) -> int | None:
     for index in range(len(messages) - 1, -1, -1):
-        if messages[index]["role"] == "user":
+        if message_role(messages[index]) == "user":
             return index
     return None
 

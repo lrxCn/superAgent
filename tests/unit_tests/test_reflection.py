@@ -8,11 +8,14 @@ from agent.graph import build_graph
 from agent.llm import FakeLLMClient
 from agent.reflection import (
     EvaluationResult,
+    build_evaluator_messages,
     compute_reflection_gate,
     evaluate_output,
+    parse_evaluation_response,
     revise_output,
 )
 from agent.state import AgentState
+from agent.tools.mcp import FakeMCPClient, ToolObservation, ToolSpec
 
 pytestmark = pytest.mark.anyio
 
@@ -47,6 +50,29 @@ def _state(**overrides: object) -> AgentState:
     }
     state.update(overrides)  # type: ignore[typeddict-item]
     return state
+
+
+def _fake_mcp_client() -> FakeMCPClient:
+    return FakeMCPClient(
+        tools=[
+            ToolSpec(
+                name="read_file",
+                description="Read a file",
+                input_schema={
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            )
+        ],
+        responses={
+            "read_file": ToolObservation(
+                tool_name="read_file",
+                content='{"text":"hello"}',
+                success=True,
+            )
+        },
+    )
 
 
 def test_gate_skips_direct_low_risk_path_with_reason() -> None:
@@ -159,6 +185,67 @@ def test_evaluator_fails_on_quality_marker() -> None:
     assert result["suggestions"]
 
 
+def test_parse_llm_evaluator_response_normalizes_status_and_feedback() -> None:
+    gate = compute_reflection_gate(
+        _state(
+            intent_decision={
+                "path": "react_agent",
+                "reason": "tools",
+                "confidence": 0.9,
+                "signals": ["tool:file"],
+                "requires_reflection": True,
+            }
+        )
+    )
+
+    result = parse_evaluation_response(
+        """
+        ```json
+        {
+          "status": "FAIL",
+          "issues": ["missing_test_result"],
+          "suggestions": ["Mention whether tests passed."]
+        }
+        ```
+        """,
+        gate=gate,
+        reflection_round=0,
+        model="fake-model",
+    )
+
+    assert result is not None
+    assert result["status"] == "fail"
+    assert result["source"] == "llm"
+    assert result["model"] == "fake-model"
+    assert result["requires_revision"] is True
+    assert result["issues"] == ["missing_test_result"]
+    assert result["suggestions"] == ["Mention whether tests passed."]
+
+
+def test_build_evaluator_messages_include_answer_and_feedback_context() -> None:
+    messages = build_evaluator_messages(
+        _state(
+            final_answer="Draft answer",
+            observations=[
+                {"source": "tool", "content": "Tool output", "error": None},
+            ],
+            evaluation={
+                "enabled": True,
+                "status": "not_required",
+                "issues": [],
+                "suggestions": [],
+                "gate_reasons": ["path:react_agent"],
+            },
+        )
+    )
+
+    assert messages[0]["role"] == "system"
+    assert "Return JSON only" in messages[0]["content"]
+    assert "Draft answer" in messages[1]["content"]
+    assert "path:react_agent" in messages[1]["content"]
+    assert "Tool output" in messages[1]["content"]
+
+
 def test_revise_removes_quality_marker() -> None:
     revised = revise_output(
         _state(
@@ -176,6 +263,23 @@ def test_revise_removes_quality_marker() -> None:
     assert revised
 
 
+def test_revise_consumes_llm_issues_and_suggestions() -> None:
+    revised = revise_output(
+        _state(
+            final_answer="Draft answer",
+            evaluation={
+                "enabled": True,
+                "status": "fail",
+                "issues": ["missing_test_result"],
+                "suggestions": ["Mention whether tests passed."],
+            },
+        )
+    )
+
+    assert "Quality review focus: missing_test_result." in revised
+    assert "Mention whether tests passed." in revised
+
+
 async def test_direct_path_skips_evaluator_in_graph() -> None:
     graph = build_graph(llm_client=FakeLLMClient(responses=["LangGraph coordinates agent nodes."]))
     result = await graph.ainvoke({"messages": [{"role": "user", "content": "What is LangGraph?"}]})
@@ -188,12 +292,15 @@ async def test_direct_path_skips_evaluator_in_graph() -> None:
 
 
 async def test_tool_path_runs_evaluator_and_passes() -> None:
+    client = FakeLLMClient(
+        responses=[
+            '{"action":"finish","answer":"Tool path completed with enough detail."}',
+            '{"status":"PASS","issues":[],"suggestions":[]}',
+        ]
+    )
     graph = build_graph(
-        llm_client=FakeLLMClient(
-            responses=[
-                '{"action":"finish","answer":"Tool path completed with enough detail."}',
-            ]
-        )
+        llm_client=client,
+        mcp_client=_fake_mcp_client(),
     )
     result = await graph.ainvoke(
         {"messages": [{"role": "user", "content": "Read the README file and run the tests."}]}
@@ -202,7 +309,34 @@ async def test_tool_path_runs_evaluator_and_passes() -> None:
     assert result["intent_decision"]["path"] == "react_agent"
     assert result["evaluation"]["enabled"] is True
     assert result["evaluation"]["status"] == "pass"
+    assert result["evaluation"]["source"] == "llm"
     assert any(reason.startswith("path:react_agent") for reason in result["evaluation"]["gate_reasons"])
+    assert len(client.calls) == 2
+    assert "reflection evaluator" in client.calls[-1].messages[0]["content"]
+
+
+async def test_tool_path_llm_evaluator_feedback_drives_revise() -> None:
+    client = FakeLLMClient(
+        responses=[
+            '{"action":"finish","answer":"Tool path completed."}',
+            '{"status":"FAIL","issues":["missing_test_result"],"suggestions":["Mention test status."]}',
+            '{"status":"FAIL","issues":["missing_test_result"],"suggestions":["Mention test status."]}',
+        ]
+    )
+    graph = build_graph(
+        llm_client=client,
+        mcp_client=_fake_mcp_client(),
+    )
+    result = await graph.ainvoke(
+        {"messages": [{"role": "user", "content": "Read the README file and run the tests."}]}
+    )
+
+    assert result["reflection_round"] == 1
+    assert result["reflection_exhausted"] is True
+    assert "Quality review focus: missing_test_result." in result["final_answer"]
+    assert "Mention test status." in result["final_answer"]
+    assert "Issues: missing_test_result." in result["final_answer"]
+    assert len(client.calls) == 3
 
 
 async def test_fail_revise_once_then_fallback_when_still_failing() -> None:

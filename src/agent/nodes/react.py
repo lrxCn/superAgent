@@ -6,11 +6,20 @@ import json
 from dataclasses import dataclass, field
 from typing import Callable, Literal, cast
 
+from langchain_core.messages import MessageLikeRepresentation
+
 from agent.config import AppConfig, load_config
 from agent.guardrails import check_tool_guardrail, security_event_updates
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
 from agent.observability import NodeTracker, observability_updates, safe_tool_summary
-from agent.state import AgentState, MCPSession, Message, Observation, ToolCall
+from agent.state import (
+    AgentState,
+    MCPSession,
+    Observation,
+    ToolCall,
+    is_user_message,
+    message_content_text,
+)
 from agent.tools.mcp import (
     MCPClient,
     MCPConnectionError,
@@ -379,7 +388,7 @@ def build_react_messages(
     state: AgentState,
     tools: list[ToolSpec],
     observations: list[Observation],
-) -> list[Message]:
+) -> list[MessageLikeRepresentation]:
     """Build the prompt for one ReAct step."""
     user_goal = _latest_user_text(state)
     tool_lines = [
@@ -443,8 +452,8 @@ def _find_tool(tools: list[ToolSpec], tool_name: str) -> ToolSpec | None:
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message["role"] == "user":
-            return message["content"]
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 

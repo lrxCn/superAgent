@@ -8,7 +8,14 @@ from typing import Callable
 
 from agent.config import load_config
 from agent.observability import NodeTracker
-from agent.state import AgentResult, AgentState, Observation, RuntimeConfig
+from agent.state import (
+    AgentResult,
+    AgentState,
+    Observation,
+    RuntimeConfig,
+    is_user_message,
+    message_content_text,
+)
 from agent.workers import default_worker_registry
 from agent.workers.protocol import (
     ROLE_AGENT_NAMES,
@@ -72,8 +79,10 @@ DEFAULT_WORKERS: tuple[WorkerRole, ...] = (
 def extract_user_task(state: AgentState) -> str:
     """Return the latest user message as the worker task."""
     for message in reversed(state.get("messages", [])):
-        if message.get("role") == "user" and message.get("content"):
-            return str(message["content"]).strip()
+        if is_user_message(message):
+            content = message_content_text(message).strip()
+            if content:
+                return content
     return ""
 
 

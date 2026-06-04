@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import inspect
+import json
 import re
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Callable, Literal
 
+from langchain_core.messages import MessageLikeRepresentation
+
 from agent.config import load_config
+from agent.llm import LLMClient, LLMRequest, create_siliconflow_llm
 from agent.observability import NodeTracker, safe_summary
 from agent.router import (
     HIGH_RISK_KEYWORDS,
     LOW_CONFIDENCE_THRESHOLD,
     REVIEW_KEYWORDS,
 )
-from agent.state import AgentState, Evaluation, RoutePath
+from agent.state import (
+    AgentState,
+    Evaluation,
+    RoutePath,
+    is_user_message,
+    message_content_text,
+)
 
 EvaluationStatus = Literal["not_required", "pass", "fail"]
 EvaluationResult = Evaluation
-EvaluatorFn = Callable[[AgentState], EvaluationResult]
+EvaluatorFn = Callable[[AgentState], EvaluationResult | Awaitable[EvaluationResult]]
 ReviseFn = Callable[[AgentState], str]
 
 
@@ -27,6 +39,14 @@ REFLECTION_PATHS: frozenset[RoutePath] = frozenset(
 
 FAILURE_MARKERS = ("NEEDS_REVISION", "INCOMPLETE_ANSWER")
 MIN_ANSWER_LENGTH = 8
+EVALUATOR_SYSTEM_PROMPT = (
+    "You are SuperAgent's reflection evaluator. Judge whether the draft answer "
+    "satisfies the user's request, respects safety constraints, and does not "
+    "contain placeholders. Return JSON only with this exact shape: "
+    '{"status":"PASS|FAIL","issues":["short machine-readable issue ids"],'
+    '"suggestions":["specific revision guidance"]}. Use PASS only when no '
+    "revision is needed."
+)
 
 
 @dataclass(frozen=True)
@@ -113,6 +133,8 @@ def build_gate_evaluation(
             "requires_revision": False,
             "gate_reasons": gate.reasons,
             "skip_reason": None,
+            "source": "rule",
+            "model": None,
         }
     return {
         "enabled": False,
@@ -123,6 +145,8 @@ def build_gate_evaluation(
         "requires_revision": False,
         "gate_reasons": [],
         "skip_reason": gate.skip_reason,
+        "source": "rule",
+        "model": None,
     }
 
 
@@ -168,6 +192,100 @@ def evaluate_output(state: AgentState) -> EvaluationResult:
         "requires_revision": status == "fail",
         "gate_reasons": gate.reasons,
         "skip_reason": gate.skip_reason,
+        "source": "rule",
+        "model": None,
+    }
+
+
+async def evaluate_output_with_llm(
+    state: AgentState,
+    *,
+    llm_factory: Callable[[], LLMClient] = create_siliconflow_llm,
+) -> EvaluationResult:
+    """Run the default LLM-backed structured evaluator."""
+    gate = compute_reflection_gate(state)
+    reflection_round = state.get("reflection_round", 0)
+    try:
+        llm = llm_factory()
+        result = await llm.generate(
+            LLMRequest(messages=build_evaluator_messages(state), temperature=0.0)
+        )
+    except Exception:
+        return evaluate_output(state)
+
+    parsed = parse_evaluation_response(
+        result.content,
+        gate=gate,
+        reflection_round=reflection_round,
+        model=result.model,
+    )
+    if parsed is None:
+        return evaluate_output(state)
+    return parsed
+
+
+def build_evaluator_messages(state: AgentState) -> list[MessageLikeRepresentation]:
+    """Build the structured reflection evaluator prompt."""
+    answer = (state.get("final_answer") or "").strip()
+    gate = _current_evaluation(state)
+    gate_reasons = gate.get("gate_reasons") or compute_reflection_gate(state).reasons
+    observations = state.get("observations", [])[-4:]
+    observation_lines = [
+        f"- {item['source']}: {safe_summary(item['content'], max_chars=300)}"
+        for item in observations
+        if item.get("content")
+    ]
+    user_content = "\n\n".join(
+        [
+            f"User request:\n{_latest_user_text(state) or 'none'}",
+            f"Reflection triggers:\n{', '.join(gate_reasons) if gate_reasons else 'none'}",
+            "Recent observations:\n"
+            + ("\n".join(observation_lines) if observation_lines else "none"),
+            f"Draft answer:\n{answer or 'none'}",
+        ]
+    )
+    return [
+        {"role": "system", "content": EVALUATOR_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+
+
+def parse_evaluation_response(
+    raw: str,
+    *,
+    gate: ReflectionGateDecision,
+    reflection_round: int,
+    model: str | None = None,
+) -> EvaluationResult | None:
+    """Parse LLM evaluator JSON into the shared evaluation shape."""
+    payload = _extract_json_object(raw)
+    if payload is None:
+        return None
+
+    status = _parse_evaluation_status(payload.get("status"))
+    if status is None:
+        return None
+
+    issues = _string_list(payload.get("issues"))
+    suggestions = _string_list(payload.get("suggestions"))
+    if status == "pass":
+        issues = []
+    elif not issues:
+        issues = ["llm_quality_review_failed"]
+    if status == "fail" and not suggestions:
+        suggestions = ["Revise the answer to address the evaluator's quality concerns."]
+
+    return {
+        "enabled": gate.enabled,
+        "status": status,
+        "issues": issues,
+        "suggestions": suggestions,
+        "round": reflection_round,
+        "requires_revision": status == "fail",
+        "gate_reasons": gate.reasons,
+        "skip_reason": gate.skip_reason,
+        "source": "llm",
+        "model": model,
     }
 
 
@@ -178,6 +296,8 @@ def _current_evaluation(state: AgentState) -> Evaluation:
         "status": "not_required",
         "issues": [],
         "suggestions": [],
+        "source": "rule",
+        "model": None,
     }
 
 
@@ -206,6 +326,24 @@ def revise_output(state: AgentState) -> str:
     if "incomplete_coverage" in issues:
         user_goal = _latest_user_text(state)
         revised = f"{revised}\n\nCoverage note: addressed user request -> {user_goal}".strip()
+
+    review_notes = [
+        note
+        for note in issues
+        if note
+        and note
+        not in {
+            "empty_answer",
+            "quality_marker",
+            "answer_too_short",
+            "high_risk_without_disclaimer",
+            "incomplete_coverage",
+        }
+    ]
+    if review_notes:
+        revised = (
+            f"{revised}\n\nQuality review focus: {', '.join(review_notes)}."
+        ).strip()
 
     for suggestion in suggestions:
         if suggestion and suggestion not in revised:
@@ -290,11 +428,15 @@ class EvaluatorNode:
     """Graph node that evaluates the current final answer."""
 
     evaluator: EvaluatorFn | None = None
+    llm_factory: Callable[[], LLMClient] = create_siliconflow_llm
 
     async def __call__(self, state: AgentState) -> AgentState:
         """Evaluate the current answer and record PASS/FAIL."""
         tracker = NodeTracker(state, "evaluator", event="reflection")
-        result = (self.evaluator or evaluate_output)(state)
+        if self.evaluator is not None:
+            result = await _call_evaluator(self.evaluator, state)
+        else:
+            result = await evaluate_output_with_llm(state, llm_factory=self.llm_factory)
         return tracker.finish(
             {"evaluation": result},
             summary=f"evaluation_status={result.get('status', 'not_required')}",
@@ -327,8 +469,13 @@ def create_reflection_gate_node() -> ReflectionGateNode:
     return ReflectionGateNode()
 
 
-def create_evaluator_node(evaluator: EvaluatorFn | None = None) -> EvaluatorNode:
+def create_evaluator_node(
+    evaluator: EvaluatorFn | None = None,
+    llm_client: LLMClient | None = None,
+) -> EvaluatorNode:
     """Create the evaluator graph node."""
+    if llm_client is not None:
+        return EvaluatorNode(evaluator=evaluator, llm_factory=lambda: llm_client)
     return EvaluatorNode(evaluator=evaluator)
 
 
@@ -339,8 +486,8 @@ def create_revise_node(reviser: ReviseFn | None = None) -> ReviseNode:
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message["role"] == "user":
-            return message["content"]
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 
@@ -357,3 +504,51 @@ def _keyword_matches_text(text: str, keyword: str) -> bool:
         pattern = rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])"
         return re.search(pattern, text) is not None
     return keyword in text
+
+
+async def _call_evaluator(
+    evaluator: EvaluatorFn,
+    state: AgentState,
+) -> EvaluationResult:
+    result = evaluator(state)
+    if inspect.isawaitable(result):
+        return await result
+    return result
+
+
+def _extract_json_object(raw: str) -> dict[str, object] | None:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:].strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        payload = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _parse_evaluation_status(value: object) -> EvaluationStatus | None:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"pass", "passed", "ok"}:
+        return "pass"
+    if normalized in {"fail", "failed", "needs_revision", "revise"}:
+        return "fail"
+    return None
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [
+            safe_summary(str(item).strip(), max_chars=200)
+            for item in value
+            if str(item).strip()
+        ]
+    if isinstance(value, str) and value.strip():
+        return [safe_summary(value.strip(), max_chars=200)]
+    return []

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal, cast
 
+from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
+from langgraph.graph.message import add_messages
 from typing_extensions import NotRequired, TypedDict
 
 MessageRole = Literal["system", "user", "assistant", "tool"]
+Message = AnyMessage
 RoutePath = Literal[
     "direct_answer",
     "react_agent",
@@ -14,13 +17,6 @@ RoutePath = Literal[
     "multi_agent_orchestrator",
     "fallback",
 ]
-
-
-class Message(TypedDict):
-    """Conversation message carried through graph state."""
-
-    role: MessageRole
-    content: str
 
 
 class RuntimeConfig(TypedDict):
@@ -147,6 +143,8 @@ class Evaluation(TypedDict):
     requires_revision: NotRequired[bool]
     gate_reasons: NotRequired[list[str]]
     skip_reason: NotRequired[str | None]
+    source: NotRequired[Literal["rule", "llm"]]
+    model: NotRequired[str | None]
 
 
 class MemoryWriteResult(TypedDict):
@@ -201,7 +199,7 @@ class AgentState(TypedDict, total=False):
     dictionary keys drifting across task cards.
     """
 
-    messages: list[Message]
+    messages: Annotated[list[Message], add_messages]
     runtime_config: RuntimeConfig
     memory_context: MemoryContext
     context_budget: ContextBudget
@@ -229,4 +227,44 @@ class AgentState(TypedDict, total=False):
 
 def create_initial_state(message: str) -> AgentState:
     """Create the smallest valid caller input state."""
-    return {"messages": [{"role": "user", "content": message}]}
+    return {"messages": [HumanMessage(content=message)]}
+
+
+def message_role(message: Message) -> MessageRole:
+    """Return an OpenAI-style role for a LangChain message."""
+    if isinstance(message, BaseMessage):
+        if message.type == "human":
+            return "user"
+        if message.type == "ai":
+            return "assistant"
+        if message.type in {"system", "tool"}:
+            return cast(MessageRole, message.type)
+        return "assistant"
+    role = cast(dict[str, object], message).get("role")
+    return cast(MessageRole, role if role in {"system", "user", "assistant", "tool"} else "user")
+
+
+def message_content_text(message: Message) -> str:
+    """Return message content as text for routing, memory, and prompts."""
+    content: object
+    if isinstance(message, BaseMessage):
+        content = message.content
+    else:
+        content = cast(dict[str, object], message).get("content", "")
+
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "\n".join(parts)
+    return str(content)
+
+
+def is_user_message(message: Message) -> bool:
+    """Return whether a message came from the user/human role."""
+    return message_role(message) == "user"

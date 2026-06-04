@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from langchain_core.messages import MessageLikeRepresentation
+
 from agent.llm import LLMClient, LLMRequest, create_siliconflow_llm
 from agent.observability import safe_summary
-from agent.state import Message
 from agent.workers.protocol import WorkerCallable, WorkerInput, WorkerOutput, WorkerRole
 from agent.workers.registry import WorkerRegistry
 
@@ -90,7 +91,7 @@ class LLMWorker:
         }
 
 
-def build_worker_messages(worker_input: WorkerInput) -> list[Message]:
+def build_worker_messages(worker_input: WorkerInput) -> list[MessageLikeRepresentation]:
     """Build the role-specific prompt passed to the worker LLM."""
     role = worker_input["role"]
     return [

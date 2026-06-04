@@ -9,7 +9,14 @@ from agent.config import load_config
 from agent.context_budget import HIGH_VALUE_MARKERS
 from agent.reflection import FAILURE_MARKERS
 from agent.router import HIGH_RISK_KEYWORDS
-from agent.state import AgentState, Evaluation, RuntimeConfig
+from agent.state import (
+    AgentState,
+    Evaluation,
+    RuntimeConfig,
+    is_user_message,
+    message_content_text,
+    message_role,
+)
 
 _SENSITIVE_CONTENT_PATTERN = re.compile(
     r"(password|passwd|token|secret|api[_-]?key|authorization|credential|"
@@ -176,9 +183,9 @@ def _extract_candidates(state: AgentState) -> list[MemoryWriteCandidate]:
         base_metadata["run_id"] = run_id
 
     for message in state.get("messages", []):
-        if message["role"] != "user":
+        if not is_user_message(message):
             continue
-        content = message["content"].strip()
+        content = message_content_text(message).strip()
         if not content:
             continue
         category = _classify_user_content(content)
@@ -190,7 +197,7 @@ def _extract_candidates(state: AgentState) -> list[MemoryWriteCandidate]:
                 source="user_message",
                 confidence=0.9 if category == "preference" else 0.85,
                 category=category,
-                metadata={**base_metadata, "role": message["role"]},
+                metadata={**base_metadata, "role": message_role(message)},
             )
         )
 
@@ -258,9 +265,9 @@ def _should_consider_final_answer(state: AgentState, final_answer: str) -> bool:
 
 def _has_explicit_memory_consent(state: AgentState) -> bool:
     for message in state.get("messages", []):
-        if message["role"] != "user":
+        if not is_user_message(message):
             continue
-        lowered = message["content"].lower()
+        lowered = message_content_text(message).lower()
         if any(
             token in lowered
             for token in ("remember this", "save this", "记住", "保存到记忆", "写入记忆")

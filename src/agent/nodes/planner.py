@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, cast
 
+from langchain_core.messages import MessageLikeRepresentation
+
 from agent.config import AppConfig, load_config
 from agent.guardrails import (
     GuardrailDecision,
@@ -27,11 +29,12 @@ from agent.planning import (
 from agent.state import (
     AgentState,
     MCPSession,
-    Message,
     Observation,
     Plan,
     PlanStep,
     ToolCall,
+    is_user_message,
+    message_content_text,
 )
 from agent.tools.mcp import (
     MCPClient,
@@ -611,7 +614,10 @@ def generate_deterministic_plan(state: AgentState, *, max_steps: int = 12) -> Pl
     }
 
 
-def build_llm_step_messages(state: AgentState, step: PlanStep) -> list[Message]:
+def build_llm_step_messages(
+    state: AgentState,
+    step: PlanStep,
+) -> list[MessageLikeRepresentation]:
     """Build the prompt for one LLM plan step."""
     goal = _latest_user_text(state)
     criteria = "; ".join(step.get("acceptance_criteria", []))
@@ -774,8 +780,8 @@ def _agent_step_observation(
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message["role"] == "user":
-            return message["content"]
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 

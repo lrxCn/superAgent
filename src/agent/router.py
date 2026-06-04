@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from agent.state import AgentState, IntentDecision, RoutePath
+from agent.state import (
+    AgentState,
+    IntentDecision,
+    RoutePath,
+    is_user_message,
+    message_content_text,
+)
 
 LOW_CONFIDENCE_THRESHOLD = 0.72
 
@@ -171,8 +177,8 @@ def route_intent(state: AgentState) -> IntentDecision:
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message["role"] == "user":
-            return message["content"]
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 

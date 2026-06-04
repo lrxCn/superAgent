@@ -5,19 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    BaseMessage,
+    MessageLikeRepresentation,
+    convert_to_messages,
+)
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from agent.config import AppConfig, load_config
-from agent.state import Message
 
 
 @dataclass(frozen=True)
 class LLMRequest:
     """Provider-independent chat completion request."""
 
-    messages: list[Message]
+    messages: list[MessageLikeRepresentation]
     temperature: float | None = None
 
 
@@ -45,20 +48,6 @@ class LLMProviderError(RuntimeError):
     """Raise when the provider call fails."""
 
 
-def _to_langchain_messages(messages: list[Message]) -> list[BaseMessage]:
-    converted: list[BaseMessage] = []
-    for message in messages:
-        role = message["role"]
-        content = message["content"]
-        if role == "system":
-            converted.append(SystemMessage(content=content))
-        elif role == "assistant":
-            converted.append(AIMessage(content=content))
-        else:
-            converted.append(HumanMessage(content=content))
-    return converted
-
-
 @dataclass
 class SiliconFlowLLMClient:
     """Call SiliconFlow through the OpenAI-compatible ChatOpenAI client."""
@@ -79,6 +68,13 @@ class SiliconFlowLLMClient:
             content=str(response.content),
             model=self.config.openai_model_name,
         )
+
+
+def _to_langchain_messages(
+    messages: list[MessageLikeRepresentation],
+) -> list[BaseMessage]:
+    """Normalize dicts, tuples, and BaseMessage instances for chat models."""
+    return convert_to_messages(messages)
 
 
 @dataclass

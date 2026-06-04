@@ -247,7 +247,10 @@ def create_graph_builder(
     graph_builder.add_node("reflection_gate", create_reflection_gate_node())
     graph_builder.add_node(
         "evaluator",
-        create_evaluator_node(evaluator if callable(evaluator) else None),
+        create_evaluator_node(
+            evaluator if callable(evaluator) else None,
+            llm_client=llm_client,
+        ),
     )
     graph_builder.add_node(
         "revise",

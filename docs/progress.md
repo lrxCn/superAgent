@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Phase 1 tasks | 15 / 15 ✅ |
-| Incremental tasks | 6 / 9 |
+| Incremental tasks | 7 / 9 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: [22 - LLM evaluator](./prompts/22-llm-evaluator.md)
+**Recommended next task**: [23 - Tenant IDs and LangSmith Studio](./prompts/23-tenant-ids-and-langsmith-studio.md)
 
 **PRD**: [super-agent-incremental.md](./prd/super-agent-incremental.md) · **Deferred**: [todolist.md](./todolist.md)
 
@@ -49,7 +49,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 | 19 | [Production workers](./prompts/19-production-workers.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 20 | [Multi MCP and URL transport](./prompts/20-multi-mcp-and-url-transport.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 21 | [Configurable guardrails](./prompts/21-configurable-guardrails.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
-| 22 | [LLM evaluator](./prompts/22-llm-evaluator.md) | ⬜ 待开始 | - | G7 |
+| 22 | [LLM evaluator](./prompts/22-llm-evaluator.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 23 | [Tenant IDs and LangSmith Studio](./prompts/23-tenant-ids-and-langsmith-studio.md) | ⬜ 待开始 | - | G8；依赖 18；无自建 UI |
 | 24 | [Incremental docs closure](./prompts/24-incremental-docs-closure.md) | ⬜ 待开始 | - | G9；依赖 16–23 |
 
@@ -57,6 +57,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Completed task 22 LLM evaluator; reflection evaluator defaults to structured LLM PASS/FAIL feedback, revise consumes issues/suggestions, and fake-client unit + reflection integration Agent 验收通过。 |
 | 2026-06-04 | Completed task 21 configurable guardrails; topic block, MCP tool allowlist, max tool calls per run, ReAct/Plan interception, and security runtime events passed unit + graph integration Agent 验收。 |
 | 2026-06-04 | Completed task 20 multi MCP and URL transport; `MCP_SERVERS` supports stdio/SSE/Streamable HTTP, ReAct/Plan route `server.tool`, and stdio + HTTP MCP Agent 验收通过。 |
 | 2026-06-04 | Completed task 19 production workers; default registry uses LLM workers, plan agent steps execute, and real LLM Agent 验收通过。 |

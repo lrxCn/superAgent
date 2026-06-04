@@ -1,8 +1,9 @@
+from langchain_core.messages import HumanMessage
 from langgraph.pregel import Pregel
 
 from agent.config import DEFAULT_OPENAI_MODEL_NAME, load_config
 from agent.graph import graph
-from agent.state import create_initial_state
+from agent.state import create_initial_state, message_content_text, message_role
 
 
 def test_graph_compiles() -> None:
@@ -12,7 +13,9 @@ def test_graph_compiles() -> None:
 def test_create_initial_state_uses_messages_contract() -> None:
     state = create_initial_state("hello")
 
-    assert state == {"messages": [{"role": "user", "content": "hello"}]}
+    assert isinstance(state["messages"][0], HumanMessage)
+    assert message_role(state["messages"][0]) == "user"
+    assert message_content_text(state["messages"][0]) == "hello"
     assert "changeme" not in state
 
 

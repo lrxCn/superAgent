@@ -5,9 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from langchain_core.messages import MessageLikeRepresentation
+
 from agent.llm import LLMClient, LLMProviderError, LLMRequest, create_siliconflow_llm
 from agent.observability import NodeTracker, safe_summary
-from agent.state import AgentState, Evaluation, MemoryContext, Message, Plan
+from agent.state import (
+    AgentState,
+    Evaluation,
+    MemoryContext,
+    Plan,
+    is_user_message,
+    message_content_text,
+)
 
 SYSTEM_PROMPT = (
     "You are SuperAgent's direct answer path. Answer the user's request directly "
@@ -69,7 +78,7 @@ class DirectAnswerNode:
         )
 
 
-def build_direct_answer_messages(state: AgentState) -> list[Message]:
+def build_direct_answer_messages(state: AgentState) -> list[MessageLikeRepresentation]:
     """Build the compact prompt input consumed by the direct-answer LLM."""
     user_goal = _latest_user_text(state)
     memory_context = state.get("memory_context") or _empty_memory_context()
@@ -99,8 +108,8 @@ def create_direct_answer_node(
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message["role"] == "user":
-            return message["content"]
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 

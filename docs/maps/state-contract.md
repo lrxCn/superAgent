@@ -8,7 +8,7 @@ Callers may invoke the graph with only `messages`; `intake` normalizes the rest.
 
 | Field | Type | Set by | Purpose |
 |-------|------|--------|---------|
-| `messages` | `list[Message]` | Caller | User/assistant/tool conversation |
+| `messages` | `Annotated[list[AnyMessage], add_messages]` | Caller / LangGraph reducer | User/assistant/tool conversation; callers may pass OpenAI-style dicts, runtime state stores LangChain messages |
 | `runtime_config` | `RuntimeConfig` | `intake` | Per-run limits (`react_max_steps`, `reflection_max_rounds`, …) |
 | `memory_context` | `MemoryContext` | `load_memory` | Short/long-term snippets, entities, read errors |
 | `context_budget` | `ContextBudget` | `context_budget`, `compress_memory` | Estimated tokens, compression summary |

@@ -9,7 +9,7 @@ from agent.context_budget import (
     estimate_tokens,
 )
 from agent.llm import FakeLLMClient
-from agent.state import AgentState
+from agent.state import AgentState, message_content_text
 
 
 def test_estimate_tokens_uses_deterministic_character_approximation() -> None:
@@ -140,5 +140,5 @@ async def test_graph_compresses_over_budget_context_before_routing(monkeypatch) 
     assert result["context_budget"]["compressed"] is True
     assert result["context_budget"]["limit"] == 12
     assert result["memory_context"]["short_term"] == ["High: preserve this memory"]
-    assert result["messages"][-1]["content"] == "current goal must survive"
+    assert message_content_text(result["messages"][-1]) == "current goal must survive"
     assert result["final_answer"] == "compressed direct answer"

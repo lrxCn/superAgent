@@ -7,7 +7,13 @@ from dataclasses import dataclass
 
 from agent.config import load_config
 from agent.observability import observability_updates, safe_summary
-from agent.state import AgentState, IntentDecision, RuntimeConfig
+from agent.state import (
+    AgentState,
+    IntentDecision,
+    RuntimeConfig,
+    is_user_message,
+    message_content_text,
+)
 
 
 @dataclass(frozen=True)
@@ -156,8 +162,8 @@ def security_event_updates(
 
 def _latest_user_text(state: AgentState) -> str:
     for message in reversed(state.get("messages", [])):
-        if message.get("role") == "user":
-            return message.get("content", "")
+        if is_user_message(message):
+            return message_content_text(message)
     return ""
 
 
