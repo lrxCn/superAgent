@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from agent.graph import build_graph
+from agent.identity import graphiti_group_id
 from agent.llm import FakeLLMClient
 from agent.memory.graphiti import MockLongTermMemoryClient
 from agent.memory.policy import (
@@ -106,13 +107,18 @@ def test_preference_candidate_is_stable_and_stored() -> None:
 @pytest.mark.anyio
 async def test_execute_memory_write_stores_eligible_candidate() -> None:
     client = MockLongTermMemoryClient()
-    result = await execute_memory_write(_state(), client=client)
+    result = await execute_memory_write(
+        _state(user_id="tenant-a", group_id="tenant-a"),
+        client=client,
+    )
 
     assert result["status"] == "stored"
     assert result["target"] == "graphiti"
     assert result["stored_count"] == 1
     assert len(client.records) == 1
     assert client.records[0].metadata["confidence"] == 0.9
+    assert client.records[0].metadata["user_id"] == "tenant-a"
+    assert client.records[0].metadata["group_id"] == graphiti_group_id("tenant-a")
 
 
 @pytest.mark.anyio

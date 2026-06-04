@@ -10,7 +10,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from agent.config import AppConfig, load_config
+from agent.config import DEFAULT_USER_ID, AppConfig, load_config
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,7 @@ class MemoryWrite:
 
     content: str
     source: str
+    group_id: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -57,7 +58,13 @@ class LongTermMemoryClient(Protocol):
     async def health(self) -> bool:
         """Return whether the long-term memory backend is reachable."""
 
-    async def search(self, query: str, *, limit: int = 5) -> MemorySearchResult:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        group_id: str | None = None,
+    ) -> MemorySearchResult:
         """Search long-term memory."""
 
     async def write(self, memory: MemoryWrite) -> MemoryWriteResult:
@@ -106,9 +113,17 @@ class GraphitiMemoryClient:
         except Exception:
             return False
 
-    async def search(self, query: str, *, limit: int = 5) -> MemorySearchResult:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        group_id: str | None = None,
+    ) -> MemorySearchResult:
         """Search Graphiti via MCP, falling back to an empty result."""
         arguments: dict[str, object] = {"query": query, "max_nodes": limit}
+        if group_id:
+            arguments["group_ids"] = [group_id]
         try:
             if self.http_client is not None:
                 payload = _tool_call_payload(
@@ -132,6 +147,8 @@ class GraphitiMemoryClient:
             "source": "text",
             "source_description": "SuperAgent long-term memory",
         }
+        if memory.group_id:
+            arguments["group_id"] = memory.group_id
         try:
             if self.http_client is not None:
                 payload = _tool_call_payload(
@@ -253,7 +270,13 @@ class MockLongTermMemoryClient:
         """Return configured availability."""
         return self.available
 
-    async def search(self, query: str, *, limit: int = 5) -> MemorySearchResult:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        group_id: str | None = None,
+    ) -> MemorySearchResult:
         """Search in-memory records."""
         if self.search_error:
             return MemorySearchResult(
@@ -266,6 +289,7 @@ class MockLongTermMemoryClient:
             record
             for record in self.records
             if lowered in record.content.lower()
+            and _record_matches_group(record, group_id)
         ][:limit]
         return MemorySearchResult(records=matches, backend="mock")
 
@@ -281,10 +305,23 @@ class MockLongTermMemoryClient:
             MemoryRecord(
                 content=memory.content,
                 source=memory.source,
-                metadata=memory.metadata,
+                metadata=_memory_metadata(memory),
             )
         )
         return MemoryWriteResult(status="stored", backend="mock")
+
+
+def _record_matches_group(record: MemoryRecord, group_id: str | None) -> bool:
+    if not group_id:
+        return True
+    record_group = record.metadata.get("group_id", DEFAULT_USER_ID)
+    return record_group == group_id
+
+
+def _memory_metadata(memory: MemoryWrite) -> dict[str, object]:
+    if not memory.group_id:
+        return dict(memory.metadata)
+    return {**memory.metadata, "group_id": memory.group_id}
 
 
 def create_graphiti_client(config: AppConfig | None = None) -> GraphitiMemoryClient:

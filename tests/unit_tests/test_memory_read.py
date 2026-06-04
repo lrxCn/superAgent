@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from agent.graph import build_graph
+from agent.identity import graphiti_group_id
 from agent.llm import FakeLLMClient
 from agent.memory.graphiti import MemoryRecord, MockLongTermMemoryClient
 from agent.memory.read import latest_user_query, load_memory_context
@@ -119,7 +120,13 @@ async def test_load_memory_context_records_search_error_without_raising() -> Non
 
 async def test_load_memory_context_records_raised_search_error() -> None:
     class RaisingClient(MockLongTermMemoryClient):
-        async def search(self, query: str, *, limit: int = 5):  # type: ignore[no-untyped-def]
+        async def search(  # type: ignore[no-untyped-def]
+            self,
+            query: str,
+            *,
+            limit: int = 5,
+            group_id: str | None = None,
+        ):
             raise RuntimeError("connection refused")
 
     context = await load_memory_context(_state(), client=RaisingClient())
@@ -137,6 +144,32 @@ async def test_load_memory_context_skips_when_memory_disabled() -> None:
     )
 
     assert context == {"short_term": [], "long_term": [], "entities": [], "errors": []}
+
+
+async def test_load_memory_context_filters_by_group_id() -> None:
+    client = MockLongTermMemoryClient(
+        records=[
+            MemoryRecord(
+                content="Tenant A prefers marker-alpha.",
+                metadata={"group_id": graphiti_group_id("tenant-a")},
+            ),
+            MemoryRecord(
+                content="Tenant B prefers marker-alpha.",
+                metadata={"group_id": graphiti_group_id("tenant-b")},
+            ),
+        ]
+    )
+
+    context = await load_memory_context(
+        _state(
+            user_id="tenant-a",
+            group_id="tenant-a",
+            messages=[{"role": "user", "content": "marker-alpha"}],
+        ),
+        client=client,
+    )
+
+    assert context["long_term"] == ["Tenant A prefers marker-alpha."]
 
 
 async def test_graph_load_memory_uses_injected_client() -> None:

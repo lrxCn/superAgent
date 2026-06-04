@@ -16,6 +16,7 @@ DEFAULT_OPENAI_BASE_URL = "https://api.siliconflow.cn/v1"
 DEFAULT_OPENAI_MODEL_NAME = "Pro/moonshotai/Kimi-K2.6"
 DEFAULT_LANGCHAIN_PROJECT = "SUPER_AGENT"
 DEFAULT_LANGCHAIN_ENDPOINT = "https://api.smith.langchain.com"
+DEFAULT_USER_ID = "main"
 
 
 def _env_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -70,6 +71,7 @@ class AppConfig:
     guardrail_tool_allowlist: tuple[str, ...]
     guardrail_blocked_topics: tuple[str, ...]
     max_tool_calls_per_run: int
+    default_user_id: str
     graphiti_backend: str
     graphiti_mcp_url: str
     falkordb_url: str
@@ -96,9 +98,19 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
     """Load runtime defaults from environment variables."""
     env = _load_environment() if env is None else env
     return AppConfig(
-        langchain_tracing_v2=_env_bool(env, "LANGCHAIN_TRACING_V2", True),
-        langchain_project=env.get("LANGCHAIN_PROJECT", DEFAULT_LANGCHAIN_PROJECT),
-        langchain_endpoint=env.get("LANGCHAIN_ENDPOINT", DEFAULT_LANGCHAIN_ENDPOINT),
+        langchain_tracing_v2=_env_bool(
+            env,
+            "LANGCHAIN_TRACING_V2",
+            _env_bool(env, "LANGSMITH_TRACING", True),
+        ),
+        langchain_project=env.get(
+            "LANGCHAIN_PROJECT",
+            env.get("LANGSMITH_PROJECT", DEFAULT_LANGCHAIN_PROJECT),
+        ),
+        langchain_endpoint=env.get(
+            "LANGCHAIN_ENDPOINT",
+            env.get("LANGSMITH_ENDPOINT", DEFAULT_LANGCHAIN_ENDPOINT),
+        ),
         langsmith_api_key_present=bool(env.get("LANGSMITH_API_KEY")),
         openai_api_key=env.get("OPENAI_API_KEY") or None,
         openai_api_key_present=bool(env.get("OPENAI_API_KEY")),
@@ -127,6 +139,7 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         guardrail_tool_allowlist=tuple(_env_list(env, "GUARDRAIL_TOOL_ALLOWLIST")),
         guardrail_blocked_topics=tuple(_env_list(env, "GUARDRAIL_BLOCKED_TOPICS")),
         max_tool_calls_per_run=_env_int(env, "MAX_TOOL_CALLS_PER_RUN", 0),
+        default_user_id=env.get("SUPERAGENT_DEFAULT_USER_ID", DEFAULT_USER_ID),
         graphiti_backend=env.get("GRAPHITI_BACKEND", "falkordb"),
         graphiti_mcp_url=env.get("GRAPHITI_MCP_URL", "http://localhost:8000"),
         falkordb_url=env.get("FALKORDB_URL", "redis://localhost:6379"),

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from agent.config import load_config
+from agent.identity import resolve_group_id
 from agent.memory.graphiti import LongTermMemoryClient, create_graphiti_client
 from agent.observability import NodeTracker, safe_summary
 from agent.state import (
@@ -70,7 +71,7 @@ async def load_memory_context(
         return context
 
     try:
-        result = await client.search(query, limit=limit)
+        result = await client.search(query, limit=limit, group_id=resolve_group_id(state))
     except Exception as exc:
         context["errors"].append(f"Graphiti search failed: {safe_summary(exc)}")
         return context

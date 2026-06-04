@@ -33,6 +33,7 @@ def test_load_config_uses_safe_defaults_and_redacts_secret_presence() -> None:
     assert "placeholder" not in repr(config)
     assert config.langsmith_api_key_present is False
     assert config.openai_model_name == DEFAULT_OPENAI_MODEL_NAME
+    assert config.default_user_id == "main"
     assert config.react_max_steps == 5
     assert config.llm_max_tokens == 2048
     assert config.to_runtime_config()["react_max_steps"] == 5
@@ -81,6 +82,22 @@ def test_load_config_parses_guardrail_controls() -> None:
     ]
     assert runtime_config["guardrail_blocked_topics"] == ["credential", "malware"]
     assert runtime_config["max_tool_calls_per_run"] == 3
+
+
+def test_load_config_accepts_langsmith_env_aliases() -> None:
+    config = load_config(
+        {
+            "LANGSMITH_TRACING": "false",
+            "LANGSMITH_PROJECT": "SUPER_AGENT_DEV",
+            "LANGSMITH_ENDPOINT": "https://smith.local",
+            "SUPERAGENT_DEFAULT_USER_ID": "local-user",
+        }
+    )
+
+    assert config.langchain_tracing_v2 is False
+    assert config.langchain_project == "SUPER_AGENT_DEV"
+    assert config.langchain_endpoint == "https://smith.local"
+    assert config.default_user_id == "local-user"
 
 
 def test_load_config_keeps_legacy_mcp_example_as_default_server() -> None:

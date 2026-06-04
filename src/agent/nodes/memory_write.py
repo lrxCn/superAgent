@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from agent.config import load_config
+from agent.identity import resolve_runtime_identity
 from agent.memory.graphiti import (
     LongTermMemoryClient,
     MemoryWrite,
@@ -73,8 +74,11 @@ async def execute_memory_write(
 
     stored_count = 0
     errors: list[str] = []
+    identity = resolve_runtime_identity(state)
     for candidate in policy_result.candidates:
-        write_result = await client.write(_candidate_to_memory_write(candidate, state))
+        write_result = await client.write(
+            _candidate_to_memory_write(candidate, state, group_id=identity.group_id)
+        )
         if write_result.status == "stored":
             stored_count += 1
             continue
@@ -105,6 +109,8 @@ async def execute_memory_write(
 def _candidate_to_memory_write(
     candidate: MemoryWriteCandidate,
     state: AgentState,
+    *,
+    group_id: str,
 ) -> MemoryWrite:
     evaluation: Evaluation = state.get("evaluation") or {
         "enabled": False,
@@ -119,10 +125,13 @@ def _candidate_to_memory_write(
         "confidence": candidate.confidence,
         "evaluation_status": evaluation.get("status", "not_required"),
         "path": decision["path"] if decision else None,
+        "user_id": state.get("user_id"),
+        "group_id": group_id,
     }
     return MemoryWrite(
         content=candidate.content,
         source=candidate.source,
+        group_id=group_id,
         metadata=metadata,
         timestamp=datetime.now(UTC).isoformat(),
     )

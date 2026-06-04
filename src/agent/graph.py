@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
@@ -14,6 +15,7 @@ from agent.guardrails import (
     guardrail_intent_decision,
     security_event_updates,
 )
+from agent.identity import identity_state_updates, resolve_runtime_identity
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.memory.graphiti import LongTermMemoryClient
@@ -49,13 +51,15 @@ def _runtime_config(state: AgentState) -> RuntimeConfig:
     return state.get("runtime_config") or load_config().to_runtime_config()
 
 
-async def intake(state: AgentState) -> AgentState:
+async def intake(state: AgentState, config: RunnableConfig) -> AgentState:
     """Normalize caller input into the shared runtime state."""
     tracker = NodeTracker(state, "intake", path="control")
     tracing = langsmith_tracing_enabled()
+    identity = resolve_runtime_identity(state, config)
     return tracker.finish(
         {
             "runtime_config": _runtime_config(state),
+            **identity_state_updates(identity),
             "tool_calls": state.get("tool_calls", []),
             "observations": state.get("observations", []),
             "agent_results": state.get("agent_results", []),
@@ -63,7 +67,12 @@ async def intake(state: AgentState) -> AgentState:
             "fallback_reason": state.get("fallback_reason"),
             "runtime_events": state.get("runtime_events", []),
         },
-        summary=f"initialized runtime fields; langsmith_tracing={tracing}",
+        summary=(
+            "initialized runtime fields; "
+            f"user_id={identity.user_id} group_id={identity.group_id} "
+            f"thread_id={identity.thread_id or 'unset'} "
+            f"langsmith_tracing={tracing}"
+        ),
     )
 
 

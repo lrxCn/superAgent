@@ -59,6 +59,9 @@ def test_agent_state_accepts_minimum_runtime_contract() -> None:
             "stored_count": 0,
         },
         "final_answer": "hello",
+        "thread_id": "unit-thread",
+        "user_id": "unit-user",
+        "group_id": "unit-user",
     }
 
     expected_fields = {
@@ -77,5 +80,8 @@ def test_agent_state_accepts_minimum_runtime_contract() -> None:
         "fallback_reason",
         "memory_write_result",
         "final_answer",
+        "thread_id",
+        "user_id",
+        "group_id",
     }
     assert expected_fields.issubset(state.keys())

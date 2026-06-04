@@ -221,6 +221,8 @@ class AgentState(TypedDict, total=False):
     step_status_pending: NotRequired[PlanStepStatus | None]
     run_id: NotRequired[str]
     thread_id: NotRequired[str]
+    user_id: NotRequired[str]
+    group_id: NotRequired[str]
     runtime_events: NotRequired[list[RuntimeEvent]]
     path_metrics: NotRequired[PathMetrics]
 

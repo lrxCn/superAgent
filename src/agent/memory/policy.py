@@ -175,10 +175,16 @@ def is_stable_candidate(candidate: MemoryWriteCandidate, state: AgentState) -> b
 def _extract_candidates(state: AgentState) -> list[MemoryWriteCandidate]:
     candidates: list[MemoryWriteCandidate] = []
     thread_id = state.get("thread_id")
+    user_id = state.get("user_id")
+    group_id = state.get("group_id")
     run_id = state.get("run_id")
     base_metadata: dict[str, object] = {}
     if thread_id:
         base_metadata["thread_id"] = thread_id
+    if user_id:
+        base_metadata["user_id"] = user_id
+    if group_id:
+        base_metadata["group_id"] = group_id
     if run_id:
         base_metadata["run_id"] = run_id
 

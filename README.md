@@ -117,6 +117,7 @@ Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](doc
 - Short-term: LangGraph checkpoint + PostgreSQL (`langgraph-checkpoint-postgres`, `DATABASE_URL`, `CHECKPOINT_SETUP`). See [docs/postgres-local-runbook.md](docs/postgres-local-runbook.md).
 - Long-term read/write: Graphiti client (`memory/graphiti.py`), `load_memory` read orchestration (`memory/read.py`), write policies in `memory/policy.py`. See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
 - `load_memory` uses the latest user message as the Graphiti search query, fills `memory_context.long_term`, and records read failures in `memory_context.errors` without blocking the graph.
+- Runtime identity: pass `configurable.thread_id` for checkpoint threads and `configurable.user_id` for tenant identity. Graphiti uses a safe `group_id` derived from `user_id` by default; an explicit `configurable.group_id` can override the source value for specialized runs.
 
 ### Tools
 
@@ -152,6 +153,10 @@ npx -y @modelcontextprotocol/server-filesystem ./docs
 - Tool summaries redact secrets and omit full payloads.
 - LangSmith when `LANGCHAIN_TRACING_V2=true` and `LANGSMITH_API_KEY` is set locally.
 
+### Studio / LangSmith Debugging
+
+SuperAgent does not include a Web UI. Use `uv run langgraph dev` and invoke the `agent` graph with `configurable.thread_id` and `configurable.user_id`; the graph mirrors them into state as `thread_id`, `user_id`, and a Graphiti-safe `group_id`. LangSmith traces go to `LANGCHAIN_PROJECT`/`LANGSMITH_PROJECT` (default `SUPER_AGENT`) when `LANGCHAIN_TRACING_V2=true` or `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` is set. In LangSmith, filter or group runs by `thread_id` metadata and compare `user_id`/`group_id` in the root input/state to verify tenant memory isolation.
+
 ### Configuration
 
 Non-secret defaults: `.env_example` and `.env.example` (keep identical). Real keys only in local `.env` (gitignored).
@@ -160,6 +165,7 @@ Non-secret defaults: `.env_example` and `.env.example` (keep identical). Real ke
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_PROJECT=SUPER_AGENT
 LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+SUPERAGENT_DEFAULT_USER_ID=main
 
 OPENAI_BASE_URL=https://api.siliconflow.cn/v1
 OPENAI_MODEL_NAME=Pro/moonshotai/Kimi-K2.6

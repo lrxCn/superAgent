@@ -89,10 +89,18 @@ async def test_graphiti_search_and_write_use_mcp_tools() -> None:
             base_url="http://graphiti.local",
             http_client=http_client,
         )
-        search_result = await client.search("known")
-        write_result = await client.write(MemoryWrite(content="known fact", source="test"))
+        search_result = await client.search("known", group_id="tenant-a")
+        write_result = await client.write(
+            MemoryWrite(
+                content="known fact",
+                source="test",
+                group_id="tenant-a",
+            )
+        )
 
     assert len(search_result.records) == 1
     assert write_result.status == "stored"
     assert seen_payloads[0]["params"]["name"] == "search_nodes"
     assert seen_payloads[1]["params"]["name"] == "add_memory"
+    assert seen_payloads[0]["params"]["arguments"]["group_ids"] == ["tenant-a"]
+    assert seen_payloads[1]["params"]["arguments"]["group_id"] == "tenant-a"
