@@ -95,4 +95,4 @@ async def test_graphiti_search_and_write_use_mcp_tools() -> None:
     assert len(search_result.records) == 1
     assert write_result.status == "stored"
     assert seen_payloads[0]["params"]["name"] == "search_nodes"
-    assert seen_payloads[1]["params"]["name"] == "add_episode"
+    assert seen_payloads[1]["params"]["name"] == "add_memory"

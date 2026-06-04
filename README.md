@@ -113,7 +113,7 @@ Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](doc
 
 ### Memory
 
-- Short-term: LangGraph checkpoint + PostgreSQL (`langgraph-checkpoint-postgres`, `DATABASE_URL`, `CHECKPOINT_SETUP`).
+- Short-term: LangGraph checkpoint + PostgreSQL (`langgraph-checkpoint-postgres`, `DATABASE_URL`, `CHECKPOINT_SETUP`). See [docs/postgres-local-runbook.md](docs/postgres-local-runbook.md).
 - Long-term write: Graphiti client (`memory/graphiti.py`, policies in `memory/policy.py`). See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
 - `load_memory` currently supplies an empty `memory_context` unless the caller pre-populates it.
 

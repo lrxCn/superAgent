@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Phase 1 tasks | 15 / 15 ✅ |
-| Incremental tasks | 0 / 9 |
+| Incremental tasks | 1 / 9 |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: [16 - Local services runbooks](./prompts/16-local-services-runbooks.md)
+**Recommended next task**: [17 - Load memory read](./prompts/17-load-memory-read.md)
 
 **PRD**: [super-agent-incremental.md](./prd/super-agent-incremental.md) · **Deferred**: [todolist.md](./todolist.md)
 
@@ -43,7 +43,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 
 | ID | Task | Status | Completed At | Notes |
 |----|------|--------|--------------|-------|
-| 16 | [Local services runbooks](./prompts/16-local-services-runbooks.md) | ⬜ 待开始 | - | G1 |
+| 16 | [Local services runbooks](./prompts/16-local-services-runbooks.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 17 | [Load memory read](./prompts/17-load-memory-read.md) | ⬜ 待开始 | - | G2；依赖 16 |
 | 18 | [Memory read write loop](./prompts/18-memory-read-write-loop.md) | ⬜ 待开始 | - | G3；依赖 17 |
 | 19 | [Production workers](./prompts/19-production-workers.md) | ⬜ 待开始 | - | G4 |
@@ -57,6 +57,7 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Completed task 16 local services runbooks; Graphiti and Postgres service-backed Agent 验收通过。 |
 | 2026-06-03 | Planned incremental queue from `super-agent-incremental.md`: task cards 16–24, progress section; Phase 1 Notes 补档位诚实标注。 |
 | 2026-06-03 | Completed task 15 final docs and architecture maps. |
 | 2026-06-03 | Created SuperAgent planning docs and 15-task queue from runtime architecture PRD. |

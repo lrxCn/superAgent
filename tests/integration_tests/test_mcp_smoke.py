@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from agent.tools.mcp import (
@@ -9,8 +11,10 @@ from agent.tools.mcp import (
 pytestmark = [pytest.mark.anyio, pytest.mark.mcp]
 
 
-@pytest.mark.skip(reason="Requires local Node.js and filesystem MCP server.")
 async def test_stdio_mcp_filesystem_lists_tools() -> None:
+    if os.environ.get("RUN_MCP_TESTS") != "true":
+        pytest.skip("Set RUN_MCP_TESTS=true after local Node.js is available.")
+
     client = create_mcp_client(
         MCPStdioConfig(
             command="npx",

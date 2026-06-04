@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 import httpx
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 
 from agent.config import AppConfig, load_config
 
@@ -67,7 +69,7 @@ class GraphitiMemoryError(RuntimeError):
 
 
 def _mcp_url(base_url: str) -> str:
-    return base_url.rstrip("/") + "/mcp/"
+    return base_url.rstrip("/") + "/mcp"
 
 
 def _health_url(base_url: str) -> str:
@@ -105,43 +107,47 @@ class GraphitiMemoryClient:
             return False
 
     async def search(self, query: str, *, limit: int = 5) -> MemorySearchResult:
-        """Search Graphiti via MCP tools/call, falling back to an empty result."""
-        payload: dict[str, object] = {
-            "jsonrpc": "2.0",
-            "id": "superagent-memory-search",
-            "method": "tools/call",
-            "params": {
-                "name": "search_nodes",
-                "arguments": {"query": query, "limit": limit},
-            },
-        }
+        """Search Graphiti via MCP, falling back to an empty result."""
+        arguments: dict[str, object] = {"query": query, "max_nodes": limit}
         try:
-            response = await self._post_mcp(payload)
-            records = self._parse_records(response.json())
+            if self.http_client is not None:
+                payload = _tool_call_payload(
+                    request_id="superagent-memory-search",
+                    name="search_nodes",
+                    arguments=arguments,
+                )
+                records = self._parse_records((await self._post_mcp(payload)).json())
+            else:
+                result = await self._call_mcp_tool("search_nodes", arguments)
+                records = self._parse_tool_records(result.content)
             return MemorySearchResult(records=records, backend=self.backend)
         except Exception as exc:
             return MemorySearchResult(records=[], backend=self.backend, error=str(exc))
 
     async def write(self, memory: MemoryWrite) -> MemoryWriteResult:
-        """Write Graphiti episode via MCP tools/call, falling back to skipped."""
-        payload: dict[str, object] = {
-            "jsonrpc": "2.0",
-            "id": "superagent-memory-write",
-            "method": "tools/call",
-            "params": {
-                "name": "add_episode",
-                "arguments": {
-                    "name": memory.source,
-                    "episode_body": memory.content,
-                    "source": "text",
-                    "source_description": "SuperAgent long-term memory",
-                    "reference_time": memory.timestamp,
-                    "metadata": memory.metadata,
-                },
-            },
+        """Write Graphiti episode via MCP, falling back to skipped."""
+        arguments: dict[str, object] = {
+            "name": memory.source,
+            "episode_body": memory.content,
+            "source": "text",
+            "source_description": "SuperAgent long-term memory",
         }
         try:
-            await self._post_mcp(payload)
+            if self.http_client is not None:
+                payload = _tool_call_payload(
+                    request_id="superagent-memory-write",
+                    name="add_memory",
+                    arguments=arguments,
+                )
+                await self._post_mcp(payload)
+            else:
+                result = await self._call_mcp_tool("add_memory", arguments)
+                if result.isError:
+                    return MemoryWriteResult(
+                        status="skipped",
+                        backend=self.backend,
+                        error=str(result.content),
+                    )
             return MemoryWriteResult(status="stored", backend=self.backend)
         except Exception as exc:
             return MemoryWriteResult(status="skipped", backend=self.backend, error=str(exc))
@@ -153,9 +159,31 @@ class GraphitiMemoryClient:
 
     async def _post_mcp(self, payload: dict[str, object]) -> httpx.Response:
         async with self._client() as client:
-            response = await client.post(_mcp_url(self.base_url), json=payload)
+            response = await client.post(
+                _mcp_url(self.base_url),
+                json=payload,
+                headers={"Accept": "application/json, text/event-stream"},
+            )
             response.raise_for_status()
             return response
+
+    async def _call_mcp_tool(self, name: str, arguments: dict[str, object]):
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as http_client:
+            transport_context = streamable_http_client(
+                _mcp_url(self.base_url),
+                http_client=http_client,
+            )
+            read_stream, write_stream, _get_session_id = (
+                await transport_context.__aenter__()
+            )
+            session_context = ClientSession(read_stream, write_stream)
+            session = await session_context.__aenter__()
+            try:
+                await session.initialize()
+                return await session.call_tool(name, arguments)
+            finally:
+                await session_context.__aexit__(None, None, None)
+                await transport_context.__aexit__(None, None, None)
 
     def _parse_records(self, payload: dict[str, object]) -> list[MemoryRecord]:
         result = payload.get("result")
@@ -169,6 +197,36 @@ class GraphitiMemoryClient:
                 for item in content
             ]
         return []
+
+    def _parse_tool_records(self, content: object) -> list[MemoryRecord]:
+        if not content:
+            return []
+        records: list[MemoryRecord] = []
+        for item in content if isinstance(content, list) else [content]:
+            text = getattr(item, "text", None)
+            raw = text if text is not None else item
+            records.append(
+                MemoryRecord(
+                    content=str(raw),
+                    source="graphiti",
+                    metadata={"raw": raw},
+                )
+            )
+        return records
+
+
+def _tool_call_payload(
+    *,
+    request_id: str,
+    name: str,
+    arguments: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": arguments},
+    }
 
 
 @dataclass
