@@ -9,7 +9,7 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | Phase 1: 15/15 · Incremental: [0/9 — progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [2/9 — progress.md](docs/progress.md) |
 | Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
 | Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
@@ -26,12 +26,12 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Plan-and-execute (generate, validate, execute, observe) | Implemented |
 | Parallel multi-agent orchestrator | Implemented (mock workers) |
 | Reflection gate, evaluator, revise, max rounds | Implemented |
-| Memory write policies + Graphiti client | Implemented (write path; read stub) |
+| Memory read/write policies + Graphiti client | Implemented (Graphiti read/write; read failure degrades) |
 | PostgreSQL checkpointer factory | Implemented (optional; memory fallback) |
 | Runtime events + path metrics | Implemented |
 | LangGraph Platform deployment | Planned (out of phase 1 scope) |
 | Production MCP servers | Planned (backend-provided; example server only) |
-| Long-term memory read on `load_memory` | Planned (node returns empty context today) |
+| Long-term memory read on `load_memory` | Implemented (Graphiti search into `memory_context.long_term`) |
 | Production worker backends | Planned (mock registry today) |
 
 ## Documentation Order
@@ -114,8 +114,8 @@ Nodes use explicit `AgentState` fields — see [docs/maps/state-contract.md](doc
 ### Memory
 
 - Short-term: LangGraph checkpoint + PostgreSQL (`langgraph-checkpoint-postgres`, `DATABASE_URL`, `CHECKPOINT_SETUP`). See [docs/postgres-local-runbook.md](docs/postgres-local-runbook.md).
-- Long-term write: Graphiti client (`memory/graphiti.py`, policies in `memory/policy.py`). See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
-- `load_memory` currently supplies an empty `memory_context` unless the caller pre-populates it.
+- Long-term read/write: Graphiti client (`memory/graphiti.py`), `load_memory` read orchestration (`memory/read.py`), write policies in `memory/policy.py`. See [docs/graphiti-orbstack-runbook.md](docs/graphiti-orbstack-runbook.md).
+- `load_memory` uses the latest user message as the Graphiti search query, fills `memory_context.long_term`, and records read failures in `memory_context.errors` without blocking the graph.
 
 ### Tools
 

@@ -12,6 +12,7 @@ from agent.context_budget import check_context_budget, compress_state_context
 from agent.llm import LLMClient
 from agent.memory.checkpoint import CheckpointerResource, create_postgres_checkpointer
 from agent.memory.graphiti import LongTermMemoryClient
+from agent.memory.read import create_load_memory_node
 from agent.nodes.direct import create_direct_answer_node
 from agent.nodes.memory_write import create_memory_write_node
 from agent.nodes.orchestrator import create_multi_agent_orchestrator_node
@@ -33,7 +34,7 @@ from agent.reflection import (
     create_revise_node,
 )
 from agent.router import route_intent
-from agent.state import AgentState, MemoryContext, RuntimeConfig
+from agent.state import AgentState, RuntimeConfig
 from agent.tools.mcp import MCPClient
 from agent.workers.registry import WorkerRegistry
 
@@ -57,22 +58,6 @@ async def intake(state: AgentState) -> AgentState:
             "runtime_events": state.get("runtime_events", []),
         },
         summary=f"initialized runtime fields; langsmith_tracing={tracing}",
-    )
-
-
-async def load_memory(state: AgentState) -> AgentState:
-    """Load placeholder memory context."""
-    tracker = NodeTracker(state, "load_memory", path="control")
-    memory_context: MemoryContext = {
-        "short_term": [],
-        "long_term": [],
-        "entities": [],
-        "errors": [],
-    }
-    loaded = state.get("memory_context") or memory_context
-    return tracker.finish(
-        {"memory_context": loaded},
-        summary=f"memory_loaded short={len(loaded['short_term'])} long={len(loaded['long_term'])}",
     )
 
 
@@ -207,7 +192,7 @@ def create_graph_builder(
     """Create the SuperAgent graph builder without external connections."""
     graph_builder = StateGraph(AgentState)
     graph_builder.add_node("intake", intake)
-    graph_builder.add_node("load_memory", load_memory)
+    graph_builder.add_node("load_memory", create_load_memory_node(client=memory_client))
     graph_builder.add_node("context_budget", context_budget)
     graph_builder.add_node("compress_memory", compress_memory)
     graph_builder.add_node("intent_router", intent_router)

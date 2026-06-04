@@ -31,6 +31,7 @@
 | `tools/mcp.py` | MCP client, tool protocol, observation sanitization |
 | `memory/checkpoint.py` | Async PostgreSQL checkpointer factory + fallback |
 | `memory/graphiti.py` | Long-term memory client (HTTP/MCP + mock) |
+| `memory/read.py` | `load_memory` Graphiti search orchestration and degraded read errors |
 | `memory/policy.py` | Write candidates, sensitive filter, stability checks |
 | `workers/protocol.py` | Worker contracts and result mapping |
 | `workers/mock.py` | Deterministic mock workers for dev/tests |
@@ -49,7 +50,7 @@
 | Planning | `tests/unit_tests/test_planning.py`, `test_plan_execute.py` | `test_graph.py`, `test_observability_paths.py` |
 | Multi-agent | `tests/unit_tests/test_orchestrator.py` | `test_graph.py` |
 | Reflection | `tests/unit_tests/test_reflection.py` | `test_graph.py` |
-| Memory write | `tests/unit_tests/test_memory_write.py` | `test_graph.py` |
+| Memory read/write | `tests/unit_tests/test_memory_read.py`, `test_memory_write.py` | `test_graphiti_memory.py`, `test_graph.py` |
 | Observability | `tests/unit_tests/test_observability.py` | `test_observability_paths.py` |
 | Checkpoint | `tests/unit_tests/test_checkpoint.py` | `test_postgres_checkpoint.py` (optional) |
 | Graphiti | `tests/unit_tests/test_graphiti_memory.py` | `test_graphiti_memory.py` (optional) |
@@ -58,7 +59,7 @@
 
 | Area | Current behavior | Follow-up |
 |------|------------------|-----------|
-| `load_memory` | Returns empty `memory_context` unless caller pre-fills | Wire Graphiti/checkpoint reads |
+| `load_memory` | Reads Graphiti long-term memory by latest user message; failures are recorded in `memory_context.errors` | Add checkpoint short-term summary if needed |
 | Workers | `workers/mock.py` registry | Replace with production worker backends |
 | MCP tools | Example filesystem server via `MCP_EXAMPLE_*` | Backend-provided MCP servers |
 | LangGraph Platform | Not targeted | Local `langgraph dev` only (phase 1) |

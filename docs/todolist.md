@@ -9,6 +9,7 @@
 |----|------|----------|
 | PR/CI 真依赖 | GHA Postgres/MCP/Graphiti integration | 需要协作 / PR 门禁 |
 | LangGraph Platform | 云部署、托管 checkpoint | 脱离纯本地 dev |
+| Graphiti Neo4j 后端评估 | 当前本地先用 FalkorDB；后续评估是否切 Neo4j 以获得更好的图数据管理、Cypher 调试和生产运维能力 | 任务 17/18 memory read-write loop 跑通后 |
 
 ## 后端生产 MCP
 
