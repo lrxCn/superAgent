@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Phase 1 tasks | 15 / 15 ✅ |
-| Incremental tasks | 8 / 9 |
+| Incremental tasks | 9 / 9 ✅ |
 | In progress | - |
 | Blocked | 0 |
 
-**Recommended next task**: [24 - Incremental docs closure](./prompts/24-incremental-docs-closure.md)
+**Recommended next task**: Incremental queue complete. Use [todolist.md](./todolist.md) for deferred work.
 
 **PRD**: [super-agent-incremental.md](./prd/super-agent-incremental.md) · **Deferred**: [todolist.md](./todolist.md)
 
@@ -51,12 +51,13 @@ Source PRD: [super-agent-incremental.md](./prd/super-agent-incremental.md)
 | 21 | [Configurable guardrails](./prompts/21-configurable-guardrails.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 22 | [LLM evaluator](./prompts/22-llm-evaluator.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 | 23 | [Tenant IDs and LangSmith Studio](./prompts/23-tenant-ids-and-langsmith-studio.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
-| 24 | [Incremental docs closure](./prompts/24-incremental-docs-closure.md) | ⬜ 待开始 | - | G9；依赖 16–23 |
+| 24 | [Incremental docs closure](./prompts/24-incremental-docs-closure.md) | ✅ 完成 | 2026-06-04 | 本地可用 |
 
 ## Changelog
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Completed task 24 incremental docs closure; README capability tiers, module/state maps, incremental PRD checklist, and progress queue now match tasks 16–23 with no known dead deferred links. |
 | 2026-06-04 | Completed task 23 tenant IDs and LangSmith Studio; `thread_id`/`user_id` configurable now populate state, Graphiti read/write uses tenant `group_id`, README documents Studio/LangSmith contract, and tenant isolation Agent 验收通过。 |
 | 2026-06-04 | Completed task 22 LLM evaluator; reflection evaluator defaults to structured LLM PASS/FAIL feedback, revise consumes issues/suggestions, and fake-client unit + reflection integration Agent 验收通过。 |
 | 2026-06-04 | Completed task 21 configurable guardrails; topic block, MCP tool allowlist, max tool calls per run, ReAct/Plan interception, and security runtime events passed unit + graph integration Agent 验收。 |

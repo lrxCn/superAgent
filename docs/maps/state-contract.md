@@ -9,6 +9,9 @@ Callers may invoke the graph with only `messages`; `intake` normalizes the rest.
 | Field | Type | Set by | Purpose |
 |-------|------|--------|---------|
 | `messages` | `Annotated[list[AnyMessage], add_messages]` | Caller / LangGraph reducer | User/assistant/tool conversation; callers may pass OpenAI-style dicts, runtime state stores LangChain messages |
+| `thread_id` | `str` | `intake` from `configurable.thread_id` or state | LangGraph checkpoint thread identifier and LangSmith thread metadata |
+| `user_id` | `str` | `intake` from `configurable.user_id` or default | Tenant/user identity for memory isolation and tracing context |
+| `group_id` | `str` | `intake` via `identity.py` | Graphiti-safe tenant group identifier derived from `user_id` unless explicitly overridden |
 | `runtime_config` | `RuntimeConfig` | `intake` | Per-run limits (`react_max_steps`, `reflection_max_rounds`, …) |
 | `memory_context` | `MemoryContext` | `load_memory` | Short/long-term snippets, entities, read errors |
 | `context_budget` | `ContextBudget` | `context_budget`, `compress_memory` | Estimated tokens, compression summary |
@@ -55,7 +58,10 @@ Callers may invoke the graph with only `messages`; `intake` normalizes the rest.
 from agent.graph import build_graph
 
 graph = build_graph()
-result = await graph.ainvoke({"messages": [{"role": "user", "content": "hello"}]})
+result = await graph.ainvoke(
+    {"messages": [{"role": "user", "content": "hello"}]},
+    config={"configurable": {"thread_id": "local-thread", "user_id": "local-user"}},
+)
 assert "final_answer" in result
 ```
 

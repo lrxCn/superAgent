@@ -12,14 +12,14 @@ Tasks 01–15 from `docs/prompts/` are complete. Summary:
 | State schema + graph skeleton | **Implemented** | `state.py`, `graph.py` |
 | SiliconFlow LLM adapter | **Implemented** | `llm.py` |
 | Checkpoint + PostgreSQL | **Implemented** | `memory/checkpoint.py`; optional at compile |
-| Graphiti long-term memory | **Implemented (write)** | `memory/graphiti.py`, `memory/policy.py`; `load_memory` read still stub |
+| Graphiti long-term memory | **Implemented** | `memory/graphiti.py`, `memory/read.py`, `memory/policy.py`; read/write use tenant `group_id`; failures degrade |
 | Context budget + compression | **Implemented** | `context_budget.py` |
 | Intent / complexity router | **Implemented** | `router.py` |
 | Direct answer path | **Implemented** | `nodes/direct.py` |
-| MCP + ReAct loop | **Implemented** | `tools/mcp.py`, `nodes/react.py`; example filesystem MCP only |
+| MCP + ReAct loop | **Implemented** | `tools/mcp.py`, `nodes/react.py`; multi-server stdio/SSE/Streamable HTTP; local/public stand-ins |
 | Plan-and-Execute | **Implemented** | `planning.py`, `nodes/planner.py` |
-| Parallel multi-agent | **Implemented (mock workers)** | `workers/*`, `nodes/orchestrator.py` |
-| Reflection / evaluator / revise | **Implemented** | `reflection.py` |
+| Parallel multi-agent | **Implemented** | `workers/*`, `nodes/orchestrator.py`; SiliconFlow workers by default, mocks injectable |
+| Reflection / evaluator / revise | **Implemented** | `reflection.py`; structured LLM evaluator with rule/fake fallback |
 | Memory write policies | **Implemented** | `memory/policy.py`, `nodes/memory_write.py` |
 | Observability / path metrics | **Implemented** | `observability.py` |
 | LangGraph Platform deploy | **Not planned (phase 1)** | Local `langgraph dev` only |
@@ -104,7 +104,7 @@ SuperAgent 要提供一个基于 LangGraph 的通用 Agent Runtime，支持以�
 
 ## 5. 当前事实与目标差距
 
-> **Historical.** At PRD authoring time the repo was a LangGraph template. As of task 15 completion, the “目标状态” column below is largely met; remaining gaps are called out in the Implementation Status table and README “Implemented vs planned”.
+> **Historical.** At PRD authoring time the repo was a LangGraph template. As of task 24 completion, the “目标状态” column below is largely met; remaining gaps are called out in the Implementation Status table, README “Capability Status”, and `docs/todolist.md`.
 
 | Area | 当前事实 (2026-06-03) | 目标状态 |
 |------|----------|----------|

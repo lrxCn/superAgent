@@ -1,6 +1,6 @@
 # SuperAgent
 
-SuperAgent is a LangGraph-based multi-path agent runtime for local `langgraph dev`. Tasks 01–14 are implemented: routing, direct answer, MCP ReAct, plan-and-execute, parallel multi-agent, reflection, memory write policies, and runtime observability.
+SuperAgent is a LangGraph-based multi-path agent runtime for local `langgraph dev`. Tasks 01–24 are complete: the runtime now has routing, direct answer, MCP ReAct, plan-and-execute, parallel multi-agent, reflection, memory read/write, guardrails, tenant IDs, and observability for local development.
 
 Design history and decisions live in [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md). Architecture maps for the **current code** are in [docs/maps/](docs/maps/).
 
@@ -9,30 +9,32 @@ Design history and decisions live in [docs/prd/super-agent-runtime-architecture.
 | Item | Status |
 |------|--------|
 | Runtime | Multi-path LangGraph runtime (`src/agent/graph.py`) |
-| Implementation queue | Phase 1: 15/15 · Incremental: [5/9 — progress.md](docs/progress.md) |
+| Implementation queue | Phase 1: 15/15 · Incremental: [9/9 — progress.md](docs/progress.md) |
 | Incremental PRD | [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md) |
 | Deferred | [docs/todolist.md](docs/todolist.md) |
 | Architecture maps | [docs/maps/runtime-graph.md](docs/maps/runtime-graph.md), [module-map.md](docs/maps/module-map.md), [state-contract.md](docs/maps/state-contract.md) |
 | Source PRD | [docs/prd/super-agent-runtime-architecture.md](docs/prd/super-agent-runtime-architecture.md) (with implementation status) |
 
-### Implemented vs planned
+### Capability Status
 
-| Capability | Status |
-|------------|--------|
-| State schema, graph wiring, SiliconFlow LLM | Implemented |
-| Intent router (direct / ReAct / plan / multi-agent / fallback) | Implemented |
-| Context budget + deterministic compression | Implemented |
-| MCP ReAct loop + observation sanitization | Implemented (multi-server stdio + URL transport) |
-| Plan-and-execute (generate, validate, execute, observe) | Implemented |
-| Parallel multi-agent orchestrator | Implemented (LLM workers; mock injectable for tests) |
-| Reflection gate, evaluator, revise, max rounds | Implemented |
-| Memory read/write policies + Graphiti client | Implemented (Graphiti read/write; read failure degrades) |
-| PostgreSQL checkpointer factory | Implemented (optional; memory fallback) |
-| Runtime events + path metrics | Implemented |
-| LangGraph Platform deployment | Planned (out of phase 1 scope) |
-| Production MCP servers | Planned (backend-provided; local/public stand-ins documented) |
-| Long-term memory read on `load_memory` | Implemented (Graphiti search into `memory_context.long_term`) |
-| Production worker backends | Implemented (researcher/coder/reviewer/memory manager via SiliconFlow) |
+档位：`本地可用` = 已接真实本地依赖或真实 LLM/MCP 路径并通过任务卡验收；`骨架` = contract 可用但仍偏最小实现；`计划` = 明确非当前增量范围。
+
+| Capability | Tier | Current boundary |
+|------------|------|------------------|
+| State schema, graph wiring, SiliconFlow LLM | 本地可用 | `build_graph(...)` supports injectable fakes for tests |
+| Intent router (direct / ReAct / plan / multi-agent / fallback) | 本地可用 | Deterministic router; not an LLM classifier |
+| Context budget + deterministic compression | 本地可用 | Rule-based estimation/compression |
+| MCP ReAct loop + observation sanitization | 本地可用 | Multi-server stdio/SSE/Streamable HTTP; public/local stand-ins documented |
+| Plan-and-execute | 本地可用 | Plan generation/validation/execution; plan quality remains rule-oriented |
+| Parallel multi-agent orchestrator | 本地可用 | SiliconFlow workers by default; mock registry remains injectable |
+| Reflection gate, LLM evaluator, revise | 本地可用 | LLM evaluator with rule fallback/test fakes |
+| Memory read/write policies + Graphiti client | 本地可用 | Graphiti read/write with tenant `group_id`; read/write failures degrade |
+| PostgreSQL checkpointer factory | 本地可用 | Optional local service; in-memory fallback if unavailable |
+| Guardrails | 本地可用 | Configurable topic block, tool allowlist, and per-run tool cap |
+| Runtime identity + Studio/LangSmith debugging | 本地可用 | `thread_id`/`user_id` configurable; no built-in Web UI |
+| Runtime events + path metrics | 本地可用 | Structured state events; LangSmith enabled by local env |
+| LangGraph Platform deployment | 计划 | Out of local-runtime scope |
+| Production backend MCP servers | 计划 | Backend-provided servers deferred in `docs/todolist.md` |
 
 ## Documentation Order
 
@@ -214,4 +216,4 @@ Optional smoke (real services): PostgreSQL checkpoint, Graphiti, MCP filesystem 
 
 ## Maintenance
 
-Phase 1 skeleton is complete. **Incremental queue (16–24)** targets local-usable runtime — see [docs/progress.md](docs/progress.md) and [docs/prd/super-agent-incremental.md](docs/prd/super-agent-incremental.md). Execute one prompt per agent window; Agent 验收通过后再标 ✅.
+Phase 1 and the incremental local-usable queue (16–24) are complete. Future work should start from [docs/todolist.md](docs/todolist.md) or a new PRD; keep `docs/progress.md` as the changelog for completed task cards.

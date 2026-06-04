@@ -1,7 +1,7 @@
 # SuperAgent 增量 PRD
 
 > **基线**：Phase 1（prompts 01–15）已完成，见 [super-agent-runtime-architecture.md](./super-agent-runtime-architecture.md)。  
-> **本文只描述尚未实现的能力**，不重复 Phase 1 设计。
+> **当前状态**：G1–G9 已完成，本文保留为增量实施记录和验收索引，不再表示待办清单。
 
 ## 1. 目标
 
@@ -78,14 +78,16 @@ G5 与 G6 可部分并行；G8 依赖 G1–G3 的 thread / group 契约。
 
 ## 5. 验收（整体）
 
-- [ ] OrbStack 上 Graphiti +（可选）Postgres 按 runbook 起服
-- [ ] `load_memory` 非 mock 场景有 `long_term` 内容
-- [ ] multi_agent / plan agent 步走真 Worker（非 mock 文案）
-- [ ] ≥2 个 MCP server 同时配置且 tool 步可达
-- [ ] Guardrails 违规可观测且调用被拦
-- [ ] Reflection 路径 evaluator 走 LLM（mock 测试仍绿）
-- [ ] Studio + LangSmith 可验证 thread / user 隔离；Graphiti 不跨 `group_id`
-- [ ] 文档无断链、stub 边界清晰
+Status source: [progress.md](../progress.md) tasks 16–24.
+
+- [x] OrbStack 上 Graphiti +（可选）Postgres 按 runbook 起服
+- [x] `load_memory` 非 mock 场景有 `long_term` 内容
+- [x] multi_agent / plan agent 步走真 Worker（非 mock 文案）
+- [x] ≥2 个 MCP server 同时配置且 tool 步可达
+- [x] Guardrails 违规可观测且调用被拦
+- [x] Reflection 路径 evaluator 走 LLM（mock 测试仍绿）
+- [x] Studio + LangSmith 可验证 thread / user 隔离；Graphiti 不跨 `group_id`
+- [x] 文档无断链、stub 边界清晰
 
 ## 6. 任务卡
 
