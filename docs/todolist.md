@@ -3,7 +3,13 @@
 > **增量 PRD**：[super-agent-incremental.md](./prd/super-agent-incremental.md)  
 > 下列**不在**增量 PRD 内，前提满足后再做。
 
-## 通用 backlog
+## 质量与调试 backlog
+
+| 项 | 说明 | 触发条件 / 备注 |
+|----|------|-----------------|
+| MiniMax 直答质量 + 兜底失效 | `.env` 使用 `MiniMaxAI/MiniMax-M2.5` 时，简单寒暄（如「你能做什么」）可 hallucinate 成无关 JSON；`reflection_gate` 对 `direct_answer` 原设计为 `direct_low_risk` 跳过 evaluator，坏答案直达用户。trace `019e96f4-89f0-7fd3-9c06-dd9a62e71a37` | 换模型（如 Kimi）或关闭直答 reflection 豁免 + 语义 judge / regenerate 方案落地后再验 |
+| 从 checkpoint 重放 reflection 段 | 希望从 LLM（`direct_answer`）结束后用旧 state 只重跑 `reflection_gate → evaluator → …`；Studio/`langgraph dev` 默认**内存 checkpointer**，该 thread（`019e96f4-89de-7510-9b29-626b298d3f68`）**不在 Postgres**（库里仅有 integration test thread） | 需：`create_graph_with_checkpointer` 路径跑 invoke，或 trace JSON 重建 state + `update_state(as_node="direct_answer")` 脚本；评估器若调真 LLM 耗时长，应支持 `--evaluator rule` / FakeLLM |
+
 
 | 项 | 说明 | 触发条件 |
 |----|------|----------|

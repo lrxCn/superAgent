@@ -101,11 +101,7 @@ def compute_reflection_gate(state: AgentState) -> ReflectionGateDecision:
         reasons.append("route_requires_reflection")
 
     if path == "direct_answer" and not reasons:
-        return ReflectionGateDecision(
-            enabled=False,
-            reasons=[],
-            skip_reason="direct_low_risk",
-        )
+        reasons.append("path:direct_answer")
 
     if not reasons:
         return ReflectionGateDecision(
